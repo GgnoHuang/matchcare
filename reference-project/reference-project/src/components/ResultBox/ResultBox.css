@@ -1,0 +1,264 @@
+.result-box {
+  margin-top: 2rem;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.result-box.loading {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+
+.result-box.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.result-box.success {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+}
+
+/* Loading State */
+.loading-header,
+.error-header,
+.result-header {
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-bottom: 1px solid currentColor;
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+.loading-icon,
+.error-icon,
+.result-icon {
+  font-size: 2rem;
+}
+
+.loading-header h3,
+.error-header h3,
+.result-header h3 {
+  flex: 1;
+  margin: 0;
+  color: #374151;
+  font-size: 1.2rem;
+}
+
+.loading-content,
+.error-content {
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e0f2fe;
+  border-top: 3px solid #0284c7;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-content p {
+  margin: 0;
+  color: #0369a1;
+}
+
+/* Error State */
+.error-content p {
+  margin: 0 0 1rem 0;
+  color: #dc2626;
+}
+
+.retry-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.retry-btn:hover {
+  background: #dc2626;
+}
+
+/* Success State */
+.result-header {
+  background: #f9fafb;
+}
+
+.new-analysis-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.new-analysis-btn:hover {
+  background: #2563eb;
+}
+
+.result-content {
+  padding: 1.5rem;
+}
+
+.decision-card {
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.decision-card.eligible {
+  background: #f0fdf4;
+  border: 2px solid #22c55e;
+}
+
+.decision-card.ineligible {
+  background: #fef2f2;
+  border: 2px solid #ef4444;
+}
+
+.decision-card.uncertain {
+  background: #fffbeb;
+  border: 2px solid #f59e0b;
+}
+
+.decision-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.decision-icon {
+  font-size: 1.5rem;
+}
+
+.decision-header h4 {
+  margin: 0;
+  color: #374151;
+  font-size: 1.1rem;
+}
+
+.decision-text {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.details-section {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .details-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+.detail-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.detail-card h5 {
+  margin: 0 0 0.75rem 0;
+  color: #374151;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.detail-card p {
+  margin: 0;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.raw-result {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1rem;
+}
+
+.toggle-raw-btn {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background-color 0.2s;
+}
+
+.toggle-raw-btn:hover {
+  background: #e5e7eb;
+}
+
+.raw-content {
+  margin-top: 1rem;
+  background: #1f2937;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.raw-content h5 {
+  margin: 0 0 0.75rem 0;
+  color: #f9fafb;
+  font-size: 0.9rem;
+}
+
+.raw-content pre {
+  margin: 0;
+  color: #e5e7eb;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.result-meta {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+
+.meta-info {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+@media (max-width: 640px) {
+  .meta-info {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}

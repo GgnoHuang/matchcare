@@ -26,3 +26,4 @@ export async function GET() {
   // 重定向到首頁
   return NextResponse.redirect(new URL("/", process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"))
 }
+
