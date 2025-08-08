@@ -39,7 +39,7 @@ import {
   Upload,
 } from "lucide-react"
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
-import { OpenAIService, CaseData } from "@/lib/openaiService"
+import { OpenAIService, CaseData, ResourceItem, MedicalAnalysisResult } from "@/lib/openaiService"
 
 export default function AIResourcesPage() {
   // 主要功能切換狀態
@@ -56,7 +56,9 @@ export default function AIResourcesPage() {
   // 新增：AI 分析相關狀態
   const [apiKey, setApiKey] = useState("")
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null)
+  const [policyFile, setPolicyFile] = useState<UploadedFile | null>(null)
   const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null)
+  const [aiGeneratedResources, setAiGeneratedResources] = useState<ResourceItem[]>([])
   const [analysisMode, setAnalysisMode] = useState<'demo' | 'real'>('demo')
   const [error, setError] = useState<string | null>(null)
 
@@ -105,6 +107,7 @@ export default function AIResourcesPage() {
     console.log("開始真實 AI 分析...")
     console.log("API Key 存在:", !!apiKey.trim())
     console.log("上傳文件:", uploadedFile)
+    console.log("保單文件:", policyFile)
 
     if (!apiKey.trim()) {
       setError("請先輸入 OpenAI API Key")
@@ -119,19 +122,25 @@ export default function AIResourcesPage() {
     }
 
     try {
-      console.log("準備調用 OpenAI API...")
-      setAnalysisProgress(20)
-      
       const openaiService = new OpenAIService(apiKey)
       let medicalText = ''
+      let policyText = ''
 
+      // 提取病例文字
       if (uploadedFile.type === 'pdf' && uploadedFile.text) {
         medicalText = uploadedFile.text
       } else if (uploadedFile.type === 'image' && uploadedFile.base64) {
         medicalText = "請從圖片中分析醫療內容"
       }
 
-      setAnalysisProgress(40)
+      // 提取保單文字
+      if (policyFile) {
+        if (policyFile.type === 'pdf' && policyFile.text) {
+          policyText = policyFile.text
+        } else if (policyFile.type === 'image' && policyFile.base64) {
+          policyText = "請從保單圖片中分析保障內容"
+        }
+      }
 
       // 模擬案例資料（實際應用中可以從表單獲取）
       const caseData: CaseData = {
@@ -142,18 +151,62 @@ export default function AIResourcesPage() {
         notes: "透過 AI 自動分析上傳的醫療文件"
       }
 
+      console.log("第1步：基礎病例分析...")
+      setAnalysisProgress(20)
+      const medicalAnalysis = await openaiService.analyzeMedicalCase(medicalText, caseData)
+      console.log("病例分析結果:", medicalAnalysis)
+
+      console.log("第2步：搜尋政府補助資源...")
+      setAnalysisProgress(40)
+      const govResources = await openaiService.searchGovernmentSubsidies(medicalAnalysis)
+      console.log("政府補助資源:", govResources)
+
+      console.log("第3步：搜尋企業福利資源...")
       setAnalysisProgress(60)
+      const corpResources = await openaiService.searchCorporateBenefits(medicalAnalysis)
+      console.log("企業福利資源:", corpResources)
 
-      console.log("正在調用 OpenAI API...")
-      const result = await openaiService.analyzeResourceMatching(
-        medicalText,
-        caseData,
-        uploadedFile.type === 'image' ? uploadedFile.base64! : null
-      )
+      let insResources: ResourceItem[] = []
+      if (policyFile && policyText) {
+        console.log("第4步：分析保單理賠資源...")
+        setAnalysisProgress(80)
+        insResources = await openaiService.analyzeInsuranceClaims(medicalAnalysis, policyText)
+        console.log("保單理賠資源:", insResources)
+      } else {
+        console.log("跳過保單分析（無上傳保單）")
+        setAnalysisProgress(80)
+      }
 
-      console.log("OpenAI API 調用成功:", result)
-      setAnalysisProgress(80)
-      setAiAnalysisResult(result.content)
+      console.log("第5步：整合所有結果...")
+      setAnalysisProgress(90)
+      const allResources = [...govResources, ...corpResources, ...insResources]
+      setAiGeneratedResources(allResources)
+
+      // 生成分析報告
+      const analysisReport = `## 🔍 AI 分析報告
+
+### 病例分析結果
+- **主要疾病**: ${medicalAnalysis.disease}
+- **嚴重程度**: ${medicalAnalysis.severity}
+- **治療階段**: ${medicalAnalysis.treatmentStage}
+- **預估費用**: ${medicalAnalysis.estimatedCost}
+- **照護需求**: ${medicalAnalysis.careNeeds}
+- **家庭影響**: ${medicalAnalysis.familyImpact}
+
+### 資源搜尋結果
+- **政府補助資源**: ${govResources.length} 項
+- **企業福利資源**: ${corpResources.length} 項
+- **保單理賠資源**: ${insResources.length} 項
+- **總計可用資源**: ${allResources.length} 項
+
+### 建議優先級
+${allResources.filter(r => r.priority === 'high').length > 0 ? 
+  `**高優先級**: ${allResources.filter(r => r.priority === 'high').map(r => r.title).join('、')}` : 
+  '無高優先級資源'}
+
+請查看下方詳細的資源清單和申請指引。`
+
+      setAiAnalysisResult(analysisReport)
       setAnalysisProgress(100)
       
       setTimeout(() => {
@@ -186,6 +239,7 @@ export default function AIResourcesPage() {
     setAnalysisComplete(false)
     setAnalysisProgress(0)
     setAiAnalysisResult(null)
+    setAiGeneratedResources([])
     setError(null)
   }
 
@@ -199,6 +253,18 @@ export default function AIResourcesPage() {
   const handleFileError = (errorMessage: string) => {
     setError(errorMessage)
     setUploadedFile(null)
+  }
+
+  // 保單檔案上傳處理
+  const handlePolicyFileProcessed = (fileData: UploadedFile | null) => {
+    setPolicyFile(fileData)
+    setError(null)
+  }
+
+  // 保單檔案上傳錯誤處理
+  const handlePolicyFileError = (errorMessage: string) => {
+    setError(errorMessage)
+    setPolicyFile(null)
   }
 
   // 模擬資源數據
@@ -469,8 +535,22 @@ export default function AIResourcesPage() {
     },
   ]
 
+  // 獲取要顯示的資源（AI 生成資源或演示資源）
+  const getCurrentResources = () => {
+    if (analysisMode === 'real') {
+      // 真實模式只有在分析完成且有 AI 資源時才顯示
+      if (analysisComplete && aiGeneratedResources.length > 0) {
+        return aiGeneratedResources
+      }
+      // 真實模式分析中或無結果時返回空陣列
+      return []
+    }
+    // 演示模式返回假資料
+    return resources
+  }
+
   // 過濾資源
-  const filteredResources = resources.filter((resource) => {
+  const filteredResources = getCurrentResources().filter((resource) => {
     // 搜尋詞過濾
     const searchMatch =
       searchTerm === "" ||
@@ -498,6 +578,20 @@ export default function AIResourcesPage() {
     const priorityOrder = { high: 0, medium: 1, low: 2 }
     return priorityOrder[a.priority] - priorityOrder[b.priority]
   })
+
+  // 獲取資源統計
+  const getResourceStats = () => {
+    const currentResources = getCurrentResources()
+    return {
+      government: currentResources.filter(r => r.category === "政府補助").length,
+      corporate: currentResources.filter(r => r.category === "企業福利").length,
+      insurance: currentResources.filter(r => r.category === "保單理賠").length,
+      financial: currentResources.filter(r => r.category === "金融產品").length,
+      legal: currentResources.filter(r => r.category === "法律救助").length
+    }
+  }
+
+  const resourceStats = getResourceStats()
 
   return (
     <div className="container py-8">
@@ -611,11 +705,26 @@ export default function AIResourcesPage() {
                     </CardContent>
                   </Card>
 
-                  {/* 檔案上傳區域 */}
-                  <UploadZone 
-                    onFileProcessed={handleFileProcessed}
-                    onError={handleFileError}
-                  />
+                  {/* 病例檔案上傳區域 */}
+                  <div>
+                    <Label className="text-base font-medium mb-3 block">病例文件上傳</Label>
+                    <UploadZone 
+                      onFileProcessed={handleFileProcessed}
+                      onError={handleFileError}
+                    />
+                  </div>
+
+                  {/* 保單檔案上傳區域 */}
+                  <div>
+                    <Label className="text-base font-medium mb-3 block">保單文件上傳（選填）</Label>
+                    <p className="text-sm text-gray-500 mb-3">
+                      上傳保單可獲得更精確的理賠分析，如未上傳則跳過保單理賠分析
+                    </p>
+                    <UploadZone 
+                      onFileProcessed={handlePolicyFileProcessed}
+                      onError={handlePolicyFileError}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -667,19 +776,19 @@ export default function AIResourcesPage() {
                   <Progress value={analysisProgress} className="h-2" />
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-center text-sm">
                     <div className={`${analysisProgress >= 20 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      分析病歷資料
+                      {analysisMode === 'real' ? '分析病歷資料' : '分析病歷資料'}
                     </div>
                     <div className={`${analysisProgress >= 40 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      匹配政府補助
+                      {analysisMode === 'real' ? '搜尋政府補助' : '匹配政府補助'}
                     </div>
                     <div className={`${analysisProgress >= 60 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      匹配企業福利
+                      {analysisMode === 'real' ? '搜尋企業福利' : '匹配企業福利'}
                     </div>
                     <div className={`${analysisProgress >= 80 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      匹配保單理賠
+                      {analysisMode === 'real' ? (policyFile ? '分析保單理賠' : '跳過保單分析') : '匹配保單理賠'}
                     </div>
                     <div className={`${analysisProgress >= 100 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      生成資源報告
+                      {analysisMode === 'real' ? '整合分析結果' : '生成資源報告'}
                     </div>
                   </div>
                 </div>
@@ -720,7 +829,9 @@ export default function AIResourcesPage() {
                 </Card>
               )}
 
-              <div className="flex flex-col md:flex-row gap-4 mb-6">
+              {/* 只有在有資源時才顯示搜尋和篩選 */}
+              {getCurrentResources().length > 0 && (
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
                 <div className="flex-1">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -750,7 +861,10 @@ export default function AIResourcesPage() {
                   </Button>
                 </div>
               </div>
+              )}
 
+              {/* 只有在有資源時才顯示標籤頁 */}
+              {getCurrentResources().length > 0 && (
               <Tabs defaultValue="all" className="w-full" value={activeTab} onValueChange={setActiveTab}>
                 <div className="overflow-x-auto">
                   <TabsList className="mb-4">
@@ -772,7 +886,7 @@ export default function AIResourcesPage() {
                             <Shield className="h-5 w-5 text-blue-600" />
                             <h3 className="font-medium">政府補助資源</h3>
                           </div>
-                          <Badge className="bg-blue-600">6項</Badge>
+                          <Badge className="bg-blue-600">{resourceStats.government}項</Badge>
                         </div>
                       </CardContent>
                     </Card>
@@ -783,7 +897,7 @@ export default function AIResourcesPage() {
                             <Building className="h-5 w-5 text-green-600" />
                             <h3 className="font-medium">企業福利資源</h3>
                           </div>
-                          <Badge className="bg-green-600">3項</Badge>
+                          <Badge className="bg-green-600">{resourceStats.corporate}項</Badge>
                         </div>
                       </CardContent>
                     </Card>
@@ -794,7 +908,7 @@ export default function AIResourcesPage() {
                             <Shield className="h-5 w-5 text-teal-600" />
                             <h3 className="font-medium">保單理賠資源</h3>
                           </div>
-                          <Badge className="bg-teal-600">3項</Badge>
+                          <Badge className="bg-teal-600">{resourceStats.insurance}項</Badge>
                         </div>
                       </CardContent>
                     </Card>
@@ -832,9 +946,12 @@ export default function AIResourcesPage() {
                 <TabsContent value="government" className="space-y-4">
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-xl font-bold">政府補助資源</h2>
-                    <Badge className="bg-blue-600">
-                      {sortedResources.filter((r) => r.category === "政府補助").length}項
-                    </Badge>
+                    <Badge className="bg-blue-600">{resourceStats.government}項</Badge>
+                    {analysisMode === 'real' && aiGeneratedResources.length > 0 && (
+                      <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
+                        AI搜尋結果
+                      </Badge>
+                    )}
                   </div>
                   {sortedResources
                     .filter((resource) => resource.category === "政府補助")
@@ -846,9 +963,12 @@ export default function AIResourcesPage() {
                 <TabsContent value="corporate" className="space-y-4">
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-xl font-bold">企業福利資源</h2>
-                    <Badge className="bg-green-600">
-                      {sortedResources.filter((r) => r.category === "企業福利").length}項
-                    </Badge>
+                    <Badge className="bg-green-600">{resourceStats.corporate}項</Badge>
+                    {analysisMode === 'real' && aiGeneratedResources.length > 0 && (
+                      <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
+                        AI搜尋結果
+                      </Badge>
+                    )}
                   </div>
                   {sortedResources
                     .filter((resource) => resource.category === "企業福利")
@@ -860,9 +980,12 @@ export default function AIResourcesPage() {
                 <TabsContent value="insurance" className="space-y-4">
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-xl font-bold">保單理賠資源</h2>
-                    <Badge className="bg-teal-600">
-                      {sortedResources.filter((r) => r.category === "保單理賠").length}項
-                    </Badge>
+                    <Badge className="bg-teal-600">{resourceStats.insurance}項</Badge>
+                    {analysisMode === 'real' && aiGeneratedResources.length > 0 && (
+                      <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
+                        AI分析結果
+                      </Badge>
+                    )}
                   </div>
                   {sortedResources
                     .filter((resource) => resource.category === "保單理賠")
@@ -874,9 +997,12 @@ export default function AIResourcesPage() {
                 <TabsContent value="financial" className="space-y-4">
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-xl font-bold">金融產品保障</h2>
-                    <Badge className="bg-purple-600">
-                      {sortedResources.filter((r) => r.category === "金融產品").length}項
-                    </Badge>
+                    <Badge className="bg-purple-600">{resourceStats.financial}項</Badge>
+                    {analysisMode === 'real' && aiGeneratedResources.length > 0 && (
+                      <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
+                        AI搜尋結果
+                      </Badge>
+                    )}
                   </div>
                   {sortedResources
                     .filter((resource) => resource.category === "金融產品")
@@ -888,9 +1014,12 @@ export default function AIResourcesPage() {
                 <TabsContent value="legal" className="space-y-4">
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-xl font-bold">法律救助資源</h2>
-                    <Badge className="bg-red-600">
-                      {sortedResources.filter((r) => r.category === "法律救助").length}項
-                    </Badge>
+                    <Badge className="bg-red-600">{resourceStats.legal}項</Badge>
+                    {analysisMode === 'real' && aiGeneratedResources.length > 0 && (
+                      <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
+                        AI搜尋結果
+                      </Badge>
+                    )}
                   </div>
                   {sortedResources
                     .filter((resource) => resource.category === "法律救助")
@@ -899,6 +1028,23 @@ export default function AIResourcesPage() {
                     ))}
                 </TabsContent>
               </Tabs>
+              )}
+
+              {/* 真實模式且無資源時的提示 */}
+              {analysisMode === 'real' && analysisComplete && aiGeneratedResources.length === 0 && (
+                <Card className="mb-6">
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <FileSearch className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium mb-2">未找到匹配的資源</h3>
+                      <p className="text-gray-500">
+                        AI 分析完成，但根據您的病例未找到符合的補助或理賠資源。
+                        建議諮詢專業人士獲得更詳細的建議。
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
 
@@ -1539,13 +1685,30 @@ function ResourceCard({ resource }) {
     }
   }
 
+  const getCategoryIcon = (category) => {
+    switch (category) {
+      case "政府補助":
+        return <Shield className="h-5 w-5 text-blue-600" />
+      case "企業福利":
+        return <Building className="h-5 w-5 text-green-600" />
+      case "保單理賠":
+        return <Shield className="h-5 w-5 text-teal-600" />
+      case "金融產品":
+        return <CreditCard className="h-5 w-5 text-purple-600" />
+      case "法律救助":
+        return <Scale className="h-5 w-5 text-red-600" />
+      default:
+        return <FileText className="h-5 w-5 text-gray-600" />
+    }
+  }
+
   return (
     <Card className={`overflow-hidden ${getCategoryColor(resource.category)}`}>
       <CardHeader className="pb-2">
         <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-2">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              {resource.icon}
+              {resource.icon || getCategoryIcon(resource.category)}
               <CardTitle className="text-lg md:text-xl">{resource.title}</CardTitle>
               {getStatusBadge(resource.status)}
             </div>
