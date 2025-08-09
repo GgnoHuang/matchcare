@@ -39,7 +39,9 @@ import {
   Upload,
 } from "lucide-react"
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
+import FileSelector, { SelectedFileData } from "@/components/ui/file-selector"
 import { OpenAIService, CaseData, ResourceItem, MedicalAnalysisResult } from "@/lib/openaiService"
+import { checkAuth } from "@/app/actions/auth-service"
 
 export default function AIResourcesPage() {
   // 主要功能切換狀態
@@ -55,17 +57,33 @@ export default function AIResourcesPage() {
 
   // 新增：AI 分析相關狀態
   const [apiKey, setApiKey] = useState("")
-  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null)
-  const [policyFile, setPolicyFile] = useState<UploadedFile | null>(null)
+  const [selectedMedicalFile, setSelectedMedicalFile] = useState<SelectedFileData | null>(null)
+  const [selectedPolicyFile, setSelectedPolicyFile] = useState<SelectedFileData | null>(null)
   const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null)
   const [aiGeneratedResources, setAiGeneratedResources] = useState<ResourceItem[]>([])
   const [analysisMode, setAnalysisMode] = useState<'demo' | 'real'>('demo')
   const [error, setError] = useState<string | null>(null)
+  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
 
   // 快速搜尋相關狀態
   const [quickSearchTerm, setQuickSearchTerm] = useState("")
   const [quickSearchResults, setQuickSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
+
+  // 檢查用戶登入狀態
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const { isLoggedIn, user } = await checkAuth()
+        if (isLoggedIn && user) {
+          setUser(user)
+        }
+      } catch (error) {
+        console.error('獲取用戶資訊失敗:', error)
+      }
+    }
+    fetchUser()
+  }, [])
 
   // 模擬分析過程
   useEffect(() => {
@@ -106,8 +124,8 @@ export default function AIResourcesPage() {
   const performRealAIAnalysis = async () => {
     console.log("開始真實 AI 分析...")
     console.log("API Key 存在:", !!apiKey.trim())
-    console.log("上傳文件:", uploadedFile)
-    console.log("保單文件:", policyFile)
+    console.log("選擇的病歷檔案:", selectedMedicalFile)
+    console.log("選擇的保單檔案:", selectedPolicyFile)
 
     if (!apiKey.trim()) {
       setError("請先輸入 OpenAI API Key")
@@ -115,8 +133,8 @@ export default function AIResourcesPage() {
       return
     }
 
-    if (!uploadedFile) {
-      setError("請先上傳病例或醫療文件")
+    if (!selectedMedicalFile) {
+      setError("請先選擇或上傳病例或醫療文件")
       setIsAnalyzing(false)
       return
     }
@@ -127,17 +145,17 @@ export default function AIResourcesPage() {
       let policyText = ''
 
       // 提取病例文字
-      if (uploadedFile.type === 'pdf' && uploadedFile.text) {
-        medicalText = uploadedFile.text
-      } else if (uploadedFile.type === 'image' && uploadedFile.base64) {
+      if (selectedMedicalFile.fileType === 'pdf' && selectedMedicalFile.textContent) {
+        medicalText = selectedMedicalFile.textContent
+      } else if (selectedMedicalFile.fileType === 'image') {
         medicalText = "請從圖片中分析醫療內容"
       }
 
       // 提取保單文字
-      if (policyFile) {
-        if (policyFile.type === 'pdf' && policyFile.text) {
-          policyText = policyFile.text
-        } else if (policyFile.type === 'image' && policyFile.base64) {
+      if (selectedPolicyFile) {
+        if (selectedPolicyFile.fileType === 'pdf' && selectedPolicyFile.textContent) {
+          policyText = selectedPolicyFile.textContent
+        } else if (selectedPolicyFile.fileType === 'image') {
           policyText = "請從保單圖片中分析保障內容"
         }
       }
@@ -153,7 +171,7 @@ export default function AIResourcesPage() {
 
       console.log("第1步：基礎病例分析...")
       setAnalysisProgress(20)
-      const medicalImageBase64 = uploadedFile.type === 'image' ? uploadedFile.base64 : null
+      const medicalImageBase64 = selectedMedicalFile.fileType === 'image' ? selectedMedicalFile.imageBase64 : null
       const medicalAnalysis = await openaiService.analyzeMedicalCase(medicalText, caseData, medicalImageBase64)
       console.log("病例分析結果:", medicalAnalysis)
 
@@ -168,10 +186,10 @@ export default function AIResourcesPage() {
       console.log("企業福利資源:", corpResources)
 
       let insResources: ResourceItem[] = []
-      if (policyFile) {
+      if (selectedPolicyFile) {
         console.log("第4步：分析保單理賠資源...")
         setAnalysisProgress(80)
-        const policyImageBase64 = policyFile.type === 'image' ? policyFile.base64 : null
+        const policyImageBase64 = selectedPolicyFile.fileType === 'image' ? selectedPolicyFile.imageBase64 : null
         insResources = await openaiService.analyzeInsuranceClaims(medicalAnalysis, policyText, policyImageBase64)
         console.log("保單理賠資源:", insResources)
       } else {
@@ -245,28 +263,21 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
     setError(null)
   }
 
-  // 檔案上傳處理
-  const handleFileProcessed = (fileData: UploadedFile | null) => {
-    setUploadedFile(fileData)
+  // 病歷檔案選擇處理
+  const handleMedicalFileSelected = (fileData: SelectedFileData | null) => {
+    setSelectedMedicalFile(fileData)
     setError(null)
   }
 
-  // 檔案上傳錯誤處理
+  // 保單檔案選擇處理
+  const handlePolicyFileSelected = (fileData: SelectedFileData | null) => {
+    setSelectedPolicyFile(fileData)
+    setError(null)
+  }
+
+  // 檔案選擇錯誤處理
   const handleFileError = (errorMessage: string) => {
     setError(errorMessage)
-    setUploadedFile(null)
-  }
-
-  // 保單檔案上傳處理
-  const handlePolicyFileProcessed = (fileData: UploadedFile | null) => {
-    setPolicyFile(fileData)
-    setError(null)
-  }
-
-  // 保單檔案上傳錯誤處理
-  const handlePolicyFileError = (errorMessage: string) => {
-    setError(errorMessage)
-    setPolicyFile(null)
   }
 
   // 模擬資源數據
@@ -707,26 +718,25 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                     </CardContent>
                   </Card>
 
-                  {/* 病例檔案上傳區域 */}
-                  <div>
-                    <Label className="text-base font-medium mb-3 block">病例文件上傳</Label>
-                    <UploadZone 
-                      onFileProcessed={handleFileProcessed}
-                      onError={handleFileError}
-                    />
-                  </div>
+                  {/* 病歷檔案選擇區域 */}
+                  <FileSelector
+                    label="病歷文件選擇"
+                    description="選擇已上傳的病歷或醫療文件，或上傳新檔案"
+                    fileType="medical"
+                    userId={user?.id || null}
+                    onFileSelected={handleMedicalFileSelected}
+                    onError={handleFileError}
+                  />
 
-                  {/* 保單檔案上傳區域 */}
-                  <div>
-                    <Label className="text-base font-medium mb-3 block">保單文件上傳（選填）</Label>
-                    <p className="text-sm text-gray-500 mb-3">
-                      上傳保單可獲得更精確的理賠分析，如未上傳則跳過保單理賠分析
-                    </p>
-                    <UploadZone 
-                      onFileProcessed={handlePolicyFileProcessed}
-                      onError={handlePolicyFileError}
-                    />
-                  </div>
+                  {/* 保單檔案選擇區域 */}
+                  <FileSelector
+                    label="保單文件選擇（選填）"
+                    description="選擇已上傳的保單文件或上傳新檔案，可獲得更精確的理賠分析"
+                    fileType="insurance"
+                    userId={user?.id || null}
+                    onFileSelected={handlePolicyFileSelected}
+                    onError={handleFileError}
+                  />
                 </div>
               )}
 
@@ -744,7 +754,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                 <Button 
                   onClick={startAnalysis} 
                   className="gap-2 bg-blue-600 hover:bg-blue-700"
-                  disabled={analysisMode === 'real' && (!apiKey.trim() || !uploadedFile)}
+                  disabled={analysisMode === 'real' && (!apiKey.trim() || !selectedMedicalFile)}
                 >
                   <Brain className="h-4 w-4" />
                   開始AI資源分析
@@ -787,7 +797,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                       {analysisMode === 'real' ? '搜尋企業福利' : '匹配企業福利'}
                     </div>
                     <div className={`${analysisProgress >= 80 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      {analysisMode === 'real' ? (policyFile ? '分析保單理賠' : '跳過保單分析') : '匹配保單理賠'}
+                      {analysisMode === 'real' ? (selectedPolicyFile ? '分析保單理賠' : '跳過保單分析') : '匹配保單理賠'}
                     </div>
                     <div className={`${analysisProgress >= 100 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
                       {analysisMode === 'real' ? '整合分析結果' : '生成資源報告'}
