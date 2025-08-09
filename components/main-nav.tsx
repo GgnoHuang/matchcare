@@ -102,6 +102,7 @@ export function MainNav() {
     { href: "/ai-resources", label: "一鍵AI找保障" },
     { href: "/insurance", label: "保單健檢" },
     { href: "/claims", label: "理賠申請" },
+    { href: "/my-data", label: "我的資料" },
     { href: "/resources", label: "其他福利資源" },
     // { href: "/subscription", label: "訂閱方案" }, // 暫時隱藏訂閱方案
   ]
