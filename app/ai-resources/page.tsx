@@ -140,6 +140,18 @@ export default function AIResourcesPage() {
       return
     }
 
+    if (!selectedPolicyFile) {
+      setError("請先選擇或上傳保險保單文件")
+      setIsAnalyzing(false)
+      return
+    }
+
+    if (!selectedDiagnosisFile) {
+      setError("請先選擇或上傳診斷證明文件")
+      setIsAnalyzing(false)
+      return
+    }
+
     try {
       const openaiService = new OpenAIService(apiKey)
       let medicalText = ''
@@ -203,17 +215,11 @@ export default function AIResourcesPage() {
       const corpResources = await openaiService.searchCorporateBenefits(medicalAnalysis)
       console.log("企業福利資源:", corpResources)
 
-      let insResources: ResourceItem[] = []
-      if (selectedPolicyFile) {
-        console.log("第4步：分析保單理賠資源...")
-        setAnalysisProgress(80)
-        const policyImageBase64 = selectedPolicyFile.fileType === 'image' ? selectedPolicyFile.imageBase64 : null
-        insResources = await openaiService.analyzeInsuranceClaims(medicalAnalysis, policyText, policyImageBase64)
-        console.log("保單理賠資源:", insResources)
-      } else {
-        console.log("跳過保單分析（無上傳保單）")
-        setAnalysisProgress(80)
-      }
+      console.log("第4步：分析保單理賠資源...")
+      setAnalysisProgress(80)
+      const policyImageBase64 = selectedPolicyFile.fileType === 'image' ? selectedPolicyFile.imageBase64 : null
+      const insResources = await openaiService.analyzeInsuranceClaims(medicalAnalysis, policyText, policyImageBase64)
+      console.log("保單理賠資源:", insResources)
 
       console.log("第5步：整合所有結果...")
       setAnalysisProgress(90)
@@ -235,7 +241,8 @@ export default function AIResourcesPage() {
 - **政府補助資源**: ${govResources.length} 項
 - **企業福利資源**: ${corpResources.length} 項
 - **保單理賠資源**: ${insResources.length} 項
-${selectedDiagnosisFile ? '- **診斷證明**: 已提供，用於輔助分析\n' : ''}- **總計可用資源**: ${allResources.length} 項
+- **診斷證明**: 已提供，用於輔助分析
+- **總計可用資源**: ${allResources.length} 項
 
 ### 建議優先級
 ${allResources.filter(r => r.priority === 'high').length > 0 ? 
@@ -744,7 +751,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
 
                   {/* 病歷檔案選擇區域 */}
                   <FileSelector
-                    label="病歷文件選擇"
+                    label="病歷文件選擇（必填）"
                     description="選擇已上傳的病歷或醫療文件，或上傳新檔案"
                     fileType="medical"
                     userId={user?.id || null}
@@ -754,8 +761,8 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
 
                   {/* 保單檔案選擇區域 */}
                   <FileSelector
-                    label="保單文件選擇（選填）"
-                    description="選擇已上傳的保單文件或上傳新檔案，可獲得更精確的理賠分析"
+                    label="保單文件選擇（必填）"
+                    description="選擇已上傳的保單文件或上傳新檔案，進行保單理賠分析"
                     fileType="insurance"
                     userId={user?.id || null}
                     onFileSelected={handlePolicyFileSelected}
@@ -764,8 +771,8 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
 
                   {/* 診斷證明選擇區域 */}
                   <FileSelector
-                    label="診斷證明選擇（選填）"
-                    description="選擇已上傳的診斷證明或上傳新檔案，提供更完整的醫療資訊"
+                    label="診斷證明選擇（必填）"
+                    description="選擇已上傳的診斷證明或上傳新檔案，提供完整的醫療資訊"
                     fileType="diagnosis"
                     userId={user?.id || null}
                     onFileSelected={handleDiagnosisFileSelected}
@@ -788,7 +795,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                 <Button 
                   onClick={startAnalysis} 
                   className="gap-2 bg-blue-600 hover:bg-blue-700"
-                  disabled={analysisMode === 'real' && (!apiKey.trim() || !selectedMedicalFile)}
+                  disabled={analysisMode === 'real' && (!apiKey.trim() || !selectedMedicalFile || !selectedPolicyFile || !selectedDiagnosisFile)}
                 >
                   <Brain className="h-4 w-4" />
                   開始AI資源分析
@@ -831,7 +838,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                       {analysisMode === 'real' ? '搜尋企業福利' : '匹配企業福利'}
                     </div>
                     <div className={`${analysisProgress >= 80 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      {analysisMode === 'real' ? (selectedPolicyFile ? '分析保單理賠' : '跳過保單分析') : '匹配保單理賠'}
+                      {analysisMode === 'real' ? '分析保單理賠' : '匹配保單理賠'}
                     </div>
                     <div className={`${analysisProgress >= 100 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
                       {analysisMode === 'real' ? '整合分析結果' : '生成資源報告'}
