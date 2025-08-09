@@ -20,7 +20,8 @@ import {
   CheckCircle2,
   Clock,
   Settings,
-  RefreshCw
+  RefreshCw,
+  X
 } from "lucide-react"
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
 import { checkAuth } from "@/app/actions/auth-service"
@@ -57,7 +58,9 @@ export default function MyDataPage() {
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
   const [editingRecord, setEditingRecord] = useState<MedicalRecord | null>(null)
   const [editingCertificate, setEditingCertificate] = useState<DiagnosisCertificate | null>(null)
+  const [editingPolicy, setEditingPolicy] = useState<InsurancePolicy | null>(null)
   const [isClearingData, setIsClearingData] = useState<boolean>(false)
+  const [viewingTextContent, setViewingTextContent] = useState<string | null>(null)
 
   // 檢查用戶登入狀態
   useEffect(() => {
@@ -171,6 +174,29 @@ export default function MyDataPage() {
     if (!fileData || !user?.id) return
 
     try {
+      setIsAnalyzing(true)
+      setUploadSuccess(`正在分析保險保單 "${fileData.filename}"...`)
+      
+      // 使用 OpenAI 分析保單文件
+      let analyzedData = null
+      let analysisSucceeded = false
+      try {
+        const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || 'sk-temp'
+        if (apiKey === 'sk-temp') {
+          throw new Error('請先在設定頁面輸入有效的 OpenAI API 金鑰')
+        }
+        const openaiService = new OpenAIService(apiKey)
+        analyzedData = await openaiService.analyzeInsurancePolicy(
+          fileData.text || '', 
+          fileData.base64
+        )
+        analysisSucceeded = true
+        setUploadSuccess(`正在儲存保險保單 "${fileData.filename}"...`)
+      } catch (aiError) {
+        console.warn('AI 分析失敗，使用預設值:', aiError)
+        setUploadSuccess(`AI 分析失敗，正在儲存保險保單 "${fileData.filename}"...`)
+      }
+
       const policy: InsurancePolicy = {
         id: generateId(),
         fileName: fileData.filename,
@@ -179,17 +205,30 @@ export default function MyDataPage() {
         uploadDate: new Date().toISOString(),
         fileSize: fileData.size,
         textContent: fileData.text,
-        imageBase64: fileData.base64
+        imageBase64: fileData.base64,
+        policyInfo: analyzedData
       }
 
       await userDataService.saveInsurancePolicy(user.id, policy)
       await loadUserData()
       
-      setUploadSuccess(`保單檔案 "${fileData.filename}" 上傳成功！`)
-      setTimeout(() => setUploadSuccess(null), 3000)
+      if (analysisSucceeded) {
+        setUploadSuccess(`✅ 保險保單 "${fileData.filename}" 上傳並 AI 分析完成！`)
+      } else {
+        setUploadSuccess(`⚠️ 保險保單 "${fileData.filename}" 上傳完成，但 AI 分析失敗`)
+      }
+      setTimeout(() => setUploadSuccess(null), 5000)
     } catch (error) {
       console.error('上傳保單檔案失敗:', error)
-      setUploadError('上傳保單檔案失敗，請稍後再試')
+      const errorMessage = (error as Error).message
+      if (errorMessage.includes('API 金鑰')) {
+        setUploadError('請先在帳號設定中輸入有效的 OpenAI API 金鑰')
+      } else {
+        setUploadError('上傳保單檔案失敗，請稍後再試')
+      }
+      setTimeout(() => setUploadError(null), 5000)
+    } finally {
+      setIsAnalyzing(false)
     }
   }
 
@@ -374,6 +413,23 @@ export default function MyDataPage() {
       }
     } catch (error) {
       console.error('儲存診斷證明資料失敗:', error)
+    }
+  }
+
+  // 儲存編輯的保單資料
+  const handleSaveInsurancePolicy = async (policyId: string, updatedData: any) => {
+    if (!user?.id) return
+    
+    try {
+      const policy = insurancePolicies.find(p => p.id === policyId)
+      if (policy) {
+        const updatedPolicy = { ...policy, policyInfo: updatedData }
+        await userDataService.saveInsurancePolicy(user.id, updatedPolicy)
+        await loadUserData()
+        setEditingPolicy(null)
+      }
+    } catch (error) {
+      console.error('儲存保單資料失敗:', error)
     }
   }
 
@@ -700,6 +756,19 @@ export default function MyDataPage() {
                       {record.notes && (
                         <p className="text-sm text-gray-600 mt-2">{record.notes}</p>
                       )}
+                      {record.textContent && (
+                        <div className="mt-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setViewingTextContent(record.textContent || '')}
+                            className="text-xs gap-1"
+                          >
+                            <FileText className="h-3 w-3" />
+                            查看原始掃描內容
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -774,22 +843,58 @@ export default function MyDataPage() {
                       </div>
                       {policy.policyInfo && (
                         <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
-                          <div>
-                            <span className="text-gray-500">保險公司: </span>
-                            <span className="font-medium">{policy.policyInfo.insuranceCompany}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">保單號碼: </span>
-                            <span className="font-medium">{policy.policyInfo.policyNumber}</span>
-                          </div>
+                          {policy.policyInfo.policyBasicInfo?.insuranceCompany && (
+                            <div>
+                              <span className="text-gray-500">保險公司: </span>
+                              <span className="font-medium">{policy.policyInfo.policyBasicInfo.insuranceCompany}</span>
+                            </div>
+                          )}
+                          {policy.policyInfo.policyBasicInfo?.policyNumber && (
+                            <div>
+                              <span className="text-gray-500">保單號碼: </span>
+                              <span className="font-medium">{policy.policyInfo.policyBasicInfo.policyNumber}</span>
+                            </div>
+                          )}
+                          {policy.policyInfo.policyBasicInfo?.effectiveDate && (
+                            <div>
+                              <span className="text-gray-500">生效日期: </span>
+                              <span className="font-medium">{policy.policyInfo.policyBasicInfo.effectiveDate}</span>
+                            </div>
+                          )}
+                          {policy.policyInfo.insuranceContentAndFees?.insuranceAmount && (
+                            <div>
+                              <span className="text-gray-500">保險金額: </span>
+                              <span className="font-medium">{policy.policyInfo.insuranceContentAndFees.insuranceAmount}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                       {policy.notes && (
                         <p className="text-sm text-gray-600 mt-2">{policy.notes}</p>
                       )}
+                      {policy.textContent && (
+                        <div className="mt-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setViewingTextContent(policy.textContent || '')}
+                            className="text-xs gap-1"
+                          >
+                            <FileText className="h-3 w-3" />
+                            查看原始掃描內容
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingPolicy(policy)}
+                    >
+                      <Settings className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -872,6 +977,19 @@ export default function MyDataPage() {
                       )}
                       {certificate.notes && (
                         <p className="text-sm text-gray-600 mt-2">{certificate.notes}</p>
+                      )}
+                      {certificate.textContent && (
+                        <div className="mt-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setViewingTextContent(certificate.textContent || '')}
+                            className="text-xs gap-1"
+                          >
+                            <FileText className="h-3 w-3" />
+                            查看原始掃描內容
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1091,6 +1209,64 @@ export default function MyDataPage() {
                 onSave={(data) => handleSaveDiagnosisCertificate(editingCertificate.id, data)}
                 onCancel={() => setEditingCertificate(null)}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingPolicy && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-4">
+              <h2 className="text-lg font-semibold">編輯保單資料</h2>
+            </div>
+            <div className="p-6">
+              <MedicalDataEditor
+                policy={editingPolicy}
+                onSave={(data) => handleSaveInsurancePolicy(editingPolicy.id, data)}
+                onCancel={() => setEditingPolicy(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 查看原始掃描內容模態視窗 */}
+      {viewingTextContent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">原始掃描內容</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setViewingTextContent(null)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-6">
+              <div className="bg-gray-50 rounded-lg p-4 max-h-[60vh] overflow-y-auto">
+                <pre className="whitespace-pre-wrap text-sm font-mono leading-relaxed text-gray-800">
+                  {viewingTextContent}
+                </pre>
+              </div>
+              <div className="mt-4 flex justify-between items-center text-sm text-gray-500">
+                <span>共 {viewingTextContent.length} 個字元</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(viewingTextContent)
+                    alert('已複製到剪貼簿')
+                  }}
+                  className="gap-2"
+                >
+                  <FileText className="h-3 w-3" />
+                  複製內容
+                </Button>
+              </div>
             </div>
           </div>
         </div>

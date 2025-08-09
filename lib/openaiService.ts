@@ -433,7 +433,7 @@ ${imageBase64 ? '請仔細分析圖片中的診斷證明內容。\n' : ''}
     if (imageBase64) {
       // 確保 base64 格式正確
       const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`
-      messages[0].content = [
+      (messages[0] as any).content = [
         { type: 'text', text: prompt },
         { type: 'image_url', image_url: { url: imageUrl } }
       ];
@@ -490,6 +490,154 @@ ${imageBase64 ? '請仔細分析圖片中的診斷證明內容。\n' : ''}
   }
 
   /**
+   * 分析保險保單文件
+   */
+  async analyzeInsurancePolicy(text: string, imageBase64: string | null = null): Promise<any> {
+    const prompt = `你是一位專業的保險文件分析師。請從保險保單中提取以下資訊，如果找不到相關資訊請填入"待輸入"：
+
+${text ? `文字內容：\n${text}\n` : ''}
+${imageBase64 ? '請仔細分析圖片中的保險保單內容。\n' : ''}
+
+請提取以下資訊並以JSON格式回傳：
+{
+  "policyBasicInfo": {
+    "insuranceCompany": "保險公司名稱",
+    "policyNumber": "保單號碼",
+    "effectiveDate": "保單生效日期",
+    "policyTerms": "保單條款（保險責任、除外責任、理賠條件等）",
+    "insurancePeriod": "保險期間（保險契約有效期限）"
+  },
+  "policyHolderInfo": {
+    "name": "姓名",
+    "birthDate": "出生年月日",
+    "idNumber": "身分證字號",
+    "occupation": "職業",
+    "contactAddress": "聯絡地址"
+  },
+  "insuredPersonInfo": {
+    "name": "姓名",
+    "birthDate": "出生年月日",
+    "gender": "性別",
+    "idNumber": "身分證字號",
+    "occupation": "職業",
+    "contactAddress": "聯絡地址"
+  },
+  "beneficiaryInfo": {
+    "name": "姓名",
+    "relationshipToInsured": "與被保人關係",
+    "benefitRatio": "受益比例"
+  },
+  "insuranceContentAndFees": {
+    "insuranceAmount": "保險金額（保險事故發生時的給付金額）",
+    "paymentMethod": "繳費方式（月繳、季繳、年繳）",
+    "paymentPeriod": "繳費期間（非必要標示）",
+    "dividendDistribution": "紅利分配方式（非必要標示）"
+  },
+  "otherMatters": {
+    "automaticPremiumLoan": "自動墊繳條款（若保費未繳，是否自動墊繳）",
+    "additionalClauses": "附加條款與附約（醫療險、意外險等）"
+  },
+  "insuranceServiceInfo": {
+    "customerServiceHotline": "客服專線",
+    "claimsProcessIntro": "理賠流程簡介"
+  }
+}`;
+
+    const messages = [
+      { role: 'user', content: prompt }
+    ];
+
+    if (imageBase64) {
+      // 確保 base64 格式正確
+      const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`
+      (messages[0] as any).content = [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: imageUrl } }
+      ];
+    }
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: imageBase64 ? 'gpt-4o-mini' : 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.1,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API 錯誤: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      
+      // 嘗試解析JSON
+      try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      } catch (e) {
+        console.warn('無法解析JSON，返回原始內容');
+      }
+      
+      // 如果解析失敗，返回預設結構
+      return {
+        policyBasicInfo: {
+          insuranceCompany: "待輸入",
+          policyNumber: "待輸入",
+          effectiveDate: "待輸入",
+          policyTerms: "待輸入",
+          insurancePeriod: "待輸入"
+        },
+        policyHolderInfo: {
+          name: "待輸入",
+          birthDate: "待輸入",
+          idNumber: "待輸入",
+          occupation: "待輸入",
+          contactAddress: "待輸入"
+        },
+        insuredPersonInfo: {
+          name: "待輸入",
+          birthDate: "待輸入",
+          gender: "待輸入",
+          idNumber: "待輸入",
+          occupation: "待輸入",
+          contactAddress: "待輸入"
+        },
+        beneficiaryInfo: {
+          name: "待輸入",
+          relationshipToInsured: "待輸入",
+          benefitRatio: "待輸入"
+        },
+        insuranceContentAndFees: {
+          insuranceAmount: "待輸入",
+          paymentMethod: "待輸入",
+          paymentPeriod: "待輸入",
+          dividendDistribution: "待輸入"
+        },
+        otherMatters: {
+          automaticPremiumLoan: "待輸入",
+          additionalClauses: "待輸入"
+        },
+        insuranceServiceInfo: {
+          customerServiceHotline: "待輸入",
+          claimsProcessIntro: "待輸入"
+        }
+      };
+    } catch (error) {
+      console.error('保險保單分析錯誤:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 分析病例記錄文件
    */
   async analyzeMedicalRecord(text: string, imageBase64: string | null = null): Promise<any> {
@@ -516,7 +664,7 @@ ${imageBase64 ? '請仔細分析圖片中的病例記錄內容。\n' : ''}
     if (imageBase64) {
       // 確保 base64 格式正確
       const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`
-      messages[0].content = [
+      (messages[0] as any).content = [
         { type: 'text', text: prompt },
         { type: 'image_url', image_url: { url: imageUrl } }
       ];

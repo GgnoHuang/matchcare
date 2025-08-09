@@ -61,15 +61,62 @@ export interface MedicalRecord extends BaseDocument {
 export interface InsurancePolicy extends BaseDocument {
   documentType: 'insurance'
   
-  // 保單基本資訊
+  // 保單 AI 分析資訊
   policyInfo?: {
-    insuranceCompany: string
-    policyNumber: string
-    policyType: string
-    coverage: string
-    premium: string
-    startDate: string
-    endDate: string
+    // 保單基本資料
+    policyBasicInfo?: {
+      insuranceCompany?: string // 保險公司名稱
+      policyNumber?: string // 保單號碼
+      effectiveDate?: string // 保單生效日期
+      policyTerms?: string // 保單條款（保險責任、除外責任、理賠條件等）
+      insurancePeriod?: string // 保險期間（保險契約有效期限）
+    }
+    
+    // 要保人資料
+    policyHolderInfo?: {
+      name?: string // 姓名
+      birthDate?: string // 出生年月日
+      idNumber?: string // 身分證字號
+      occupation?: string // 職業
+      contactAddress?: string // 聯絡地址
+    }
+    
+    // 被保險人資料
+    insuredPersonInfo?: {
+      name?: string // 姓名
+      birthDate?: string // 出生年月日
+      gender?: string // 性別
+      idNumber?: string // 身分證字號
+      occupation?: string // 職業
+      contactAddress?: string // 聯絡地址
+    }
+    
+    // 受益人資料
+    beneficiaryInfo?: {
+      name?: string // 姓名
+      relationshipToInsured?: string // 與被保人關係
+      benefitRatio?: string // 受益比例
+    }
+    
+    // 保險內容與費用資料
+    insuranceContentAndFees?: {
+      insuranceAmount?: string // 保險金額（保險事故發生時的給付金額）
+      paymentMethod?: string // 繳費方式（月繳、季繳、年繳）
+      paymentPeriod?: string // 繳費期間（非必要標示）
+      dividendDistribution?: string // 紅利分配方式（非必要標示）
+    }
+    
+    // 其他事項
+    otherMatters?: {
+      automaticPremiumLoan?: string // 自動墊繳條款（若保費未繳，是否自動墊繳）
+      additionalClauses?: string // 附加條款與附約（醫療險、意外險等）
+    }
+    
+    // 保險公司服務資訊
+    insuranceServiceInfo?: {
+      customerServiceHotline?: string // 客服專線
+      claimsProcessIntro?: string // 理賠流程簡介
+    }
   }
 }
 
