@@ -278,7 +278,7 @@ export class LocalStorageProvider {
   // 清除用戶所有資料
   async clearUserData(userId: string): Promise<void> {
     return this.safeLocalStorageOperation(() => {
-      const dataTypes = ['medical_records', 'insurance_policies', 'analysis_results', 'settings']
+      const dataTypes = ['medical_records', 'insurance_policies', 'diagnosis_certificates', 'analysis_results', 'settings']
       dataTypes.forEach(dataType => {
         const key = this.getStorageKey(userId, dataType)
         localStorage.removeItem(key)

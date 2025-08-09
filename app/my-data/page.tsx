@@ -57,6 +57,7 @@ export default function MyDataPage() {
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
   const [editingRecord, setEditingRecord] = useState<MedicalRecord | null>(null)
   const [editingCertificate, setEditingCertificate] = useState<DiagnosisCertificate | null>(null)
+  const [isClearingData, setIsClearingData] = useState<boolean>(false)
 
   // 檢查用戶登入狀態
   useEffect(() => {
@@ -306,6 +307,40 @@ export default function MyDataPage() {
   const handleFileError = (errorMessage: string) => {
     setUploadError(errorMessage)
     setTimeout(() => setUploadError(null), 5000)
+  }
+
+  // 清除用戶所有資料
+  const handleClearAllData = async () => {
+    if (!user?.id) return
+    
+    const confirmed = confirm(
+      '⚠️ 危險操作：這將永久刪除您的所有資料，包括：\n\n' +
+      `• ${medicalRecords.length} 筆病歷記錄\n` +
+      `• ${insurancePolicies.length} 筆保險保單\n` +
+      `• ${diagnosisCertificates.length} 筆診斷證明\n` +
+      '• 所有 AI 分析結果\n' +
+      '• 個人設定\n\n' +
+      '此操作無法復原，確定要繼續嗎？'
+    )
+    
+    if (!confirmed) return
+    
+    const doubleConfirm = confirm('最後確認：真的要刪除所有資料嗎？請輸入確認後點選確定。')
+    if (!doubleConfirm) return
+    
+    try {
+      setIsClearingData(true)
+      await userDataService.clearUserData(user.id)
+      await loadUserData() // 重新載入空的資料
+      setUploadSuccess('✅ 所有資料已成功清除')
+      setTimeout(() => setUploadSuccess(null), 3000)
+    } catch (error) {
+      console.error('清除資料失敗:', error)
+      setUploadError('清除資料失敗，請稍後再試')
+      setTimeout(() => setUploadError(null), 5000)
+    } finally {
+      setIsClearingData(false)
+    }
   }
 
   // 儲存編輯的病歷資料
@@ -591,6 +626,42 @@ export default function MyDataPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* 危險區域 */}
+          <Card className="border-red-200 bg-red-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-800">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                危險區域
+              </CardTitle>
+              <CardDescription className="text-red-700">
+                以下操作將永久刪除資料，無法復原，請謹慎操作
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="destructive"
+                onClick={handleClearAllData}
+                disabled={isClearingData}
+                className="gap-2"
+              >
+                {isClearingData ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    清除中...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    清除所有資料
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-red-600 mt-2">
+                這將刪除您的所有病歷記錄、保險保單、診斷證明、AI分析結果和個人設定
+              </p>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="medical" className="space-y-4">
