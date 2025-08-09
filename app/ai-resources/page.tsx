@@ -134,20 +134,16 @@ export default function AIResourcesPage() {
       return
     }
 
-    if (!selectedMedicalFile) {
-      setError("請先選擇或上傳病例或醫療文件")
-      setIsAnalyzing(false)
-      return
-    }
-
+    // 保單必填
     if (!selectedPolicyFile) {
       setError("請先選擇或上傳保險保單文件")
       setIsAnalyzing(false)
       return
     }
 
-    if (!selectedDiagnosisFile) {
-      setError("請先選擇或上傳診斷證明文件")
+    // 病歷和診斷證明至少一項必填
+    if (!selectedMedicalFile && !selectedDiagnosisFile) {
+      setError("請至少選擇或上傳病歷記錄或診斷證明其中一項")
       setIsAnalyzing(false)
       return
     }
@@ -158,10 +154,12 @@ export default function AIResourcesPage() {
       let policyText = ''
 
       // 提取病例文字
-      if (selectedMedicalFile.fileType === 'pdf' && selectedMedicalFile.textContent) {
-        medicalText = selectedMedicalFile.textContent
-      } else if (selectedMedicalFile.fileType === 'image') {
-        medicalText = "請從圖片中分析醫療內容"
+      if (selectedMedicalFile) {
+        if (selectedMedicalFile.fileType === 'pdf' && selectedMedicalFile.textContent) {
+          medicalText = selectedMedicalFile.textContent
+        } else if (selectedMedicalFile.fileType === 'image') {
+          medicalText = "請從圖片中分析醫療內容"
+        }
       }
 
       // 提取保單文字
@@ -194,30 +192,46 @@ export default function AIResourcesPage() {
 
       console.log("第1步：基礎病例分析...")
       setAnalysisProgress(20)
-      const medicalImageBase64 = selectedMedicalFile.fileType === 'image' ? selectedMedicalFile.imageBase64 : null
+      const medicalImageBase64 = (selectedMedicalFile && selectedMedicalFile.fileType === 'image') ? selectedMedicalFile.imageBase64 : null
       
-      // 將診斷證明內容合併到醫療分析中
-      let combinedMedicalText = medicalText
+      // 合併醫療文字內容（病歷和診斷證明）
+      let combinedMedicalText = ''
+      if (medicalText) {
+        combinedMedicalText = medicalText
+      }
       if (diagnosisText) {
-        combinedMedicalText += '\n\n=== 診斷證明資料 ===\n' + diagnosisText
+        if (combinedMedicalText) {
+          combinedMedicalText += '\n\n=== 診斷證明資料 ===\n' + diagnosisText
+        } else {
+          combinedMedicalText = '=== 診斷證明資料 ===\n' + diagnosisText
+        }
       }
       
+      // 如果兩者都沒有文字內容，提供基本提示
+      if (!combinedMedicalText.trim()) {
+        combinedMedicalText = "請根據上傳的醫療文件圖片進行分析"
+      }
+      
+      // 等待 OpenAI 分析病例
       const medicalAnalysis = await openaiService.analyzeMedicalCase(combinedMedicalText, caseData, medicalImageBase64)
       console.log("病例分析結果:", medicalAnalysis)
 
       console.log("第2步：搜尋政府補助資源...")
       setAnalysisProgress(40)
+      // 等待 OpenAI 搜尋政府補助
       const govResources = await openaiService.searchGovernmentSubsidies(medicalAnalysis)
       console.log("政府補助資源:", govResources)
 
       console.log("第3步：搜尋企業福利資源...")
       setAnalysisProgress(60)
+      // 等待 OpenAI 搜尋企業福利
       const corpResources = await openaiService.searchCorporateBenefits(medicalAnalysis)
       console.log("企業福利資源:", corpResources)
 
       console.log("第4步：分析保單理賠資源...")
       setAnalysisProgress(80)
       const policyImageBase64 = selectedPolicyFile.fileType === 'image' ? selectedPolicyFile.imageBase64 : null
+      // 等待 OpenAI 分析保單理賠
       const insResources = await openaiService.analyzeInsuranceClaims(medicalAnalysis, policyText, policyImageBase64)
       console.log("保單理賠資源:", insResources)
 
@@ -751,8 +765,8 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
 
                   {/* 病歷檔案選擇區域 */}
                   <FileSelector
-                    label="病歷文件選擇（必填）"
-                    description="選擇已上傳的病歷或醫療文件，或上傳新檔案"
+                    label="病歷文件選擇（擇一必填）"
+                    description="選擇已上傳的病歷或醫療文件，或上傳新檔案（與診斷證明至少選一項）"
                     fileType="medical"
                     userId={user?.id || null}
                     onFileSelected={handleMedicalFileSelected}
@@ -771,8 +785,8 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
 
                   {/* 診斷證明選擇區域 */}
                   <FileSelector
-                    label="診斷證明選擇（必填）"
-                    description="選擇已上傳的診斷證明或上傳新檔案，提供完整的醫療資訊"
+                    label="診斷證明選擇（擇一必填）"
+                    description="選擇已上傳的診斷證明或上傳新檔案（與病歷記錄至少選一項）"
                     fileType="diagnosis"
                     userId={user?.id || null}
                     onFileSelected={handleDiagnosisFileSelected}
@@ -795,7 +809,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                 <Button 
                   onClick={startAnalysis} 
                   className="gap-2 bg-blue-600 hover:bg-blue-700"
-                  disabled={analysisMode === 'real' && (!apiKey.trim() || !selectedMedicalFile || !selectedPolicyFile || !selectedDiagnosisFile)}
+                  disabled={analysisMode === 'real' && (!apiKey.trim() || !selectedPolicyFile || (!selectedMedicalFile && !selectedDiagnosisFile))}
                 >
                   <Brain className="h-4 w-4" />
                   開始AI資源分析
@@ -822,26 +836,66 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                   <div className="flex items-center justify-center">
                     <Sparkles className="h-10 w-10 text-blue-600 animate-pulse" />
                   </div>
-                  <h2 className="text-xl font-bold text-center">AI正在分析您的病歷與保單資料</h2>
+                  <h2 className="text-xl font-bold text-center">AI正在深度分析您的醫療文件</h2>
                   <p className="text-center text-gray-500">
-                    我們正在智能匹配各類資源，包括政府補助、企業福利、保單理賠等，請稍候...
+                    OpenAI 正在處理您的病歷、診斷證明和保單資料，智能匹配各類資源，這可能需要幾十秒時間，請耐心等候...
                   </p>
                   <Progress value={analysisProgress} className="h-2" />
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-center text-sm">
                     <div className={`${analysisProgress >= 20 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      {analysisMode === 'real' ? '分析病歷資料' : '分析病歷資料'}
+                      <div className="flex flex-col items-center">
+                        <span>{analysisMode === 'real' ? 'AI分析病歷' : '分析病歷資料'}</span>
+                        {analysisProgress > 0 && analysisProgress < 40 && (
+                          <div className="flex items-center mt-1">
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                            <span className="ml-1 text-xs">處理中</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className={`${analysisProgress >= 40 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      {analysisMode === 'real' ? '搜尋政府補助' : '匹配政府補助'}
+                      <div className="flex flex-col items-center">
+                        <span>{analysisMode === 'real' ? 'AI搜尋政府補助' : '匹配政府補助'}</span>
+                        {analysisProgress >= 40 && analysisProgress < 60 && (
+                          <div className="flex items-center mt-1">
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                            <span className="ml-1 text-xs">處理中</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className={`${analysisProgress >= 60 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      {analysisMode === 'real' ? '搜尋企業福利' : '匹配企業福利'}
+                      <div className="flex flex-col items-center">
+                        <span>{analysisMode === 'real' ? 'AI搜尋企業福利' : '匹配企業福利'}</span>
+                        {analysisProgress >= 60 && analysisProgress < 80 && (
+                          <div className="flex items-center mt-1">
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                            <span className="ml-1 text-xs">處理中</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className={`${analysisProgress >= 80 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      {analysisMode === 'real' ? '分析保單理賠' : '匹配保單理賠'}
+                      <div className="flex flex-col items-center">
+                        <span>{analysisMode === 'real' ? 'AI分析保單' : '匹配保單理賠'}</span>
+                        {analysisProgress >= 80 && analysisProgress < 100 && (
+                          <div className="flex items-center mt-1">
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                            <span className="ml-1 text-xs">處理中</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className={`${analysisProgress >= 100 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
-                      {analysisMode === 'real' ? '整合分析結果' : '生成資源報告'}
+                      <div className="flex flex-col items-center">
+                        <span>{analysisMode === 'real' ? '整合AI結果' : '生成資源報告'}</span>
+                        {analysisProgress >= 100 && (
+                          <div className="flex items-center mt-1">
+                            <div className="w-3 h-3 bg-green-600 rounded-full"></div>
+                            <span className="ml-1 text-xs text-green-600">完成</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
