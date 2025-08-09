@@ -24,6 +24,8 @@ import {
 } from "lucide-react"
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
 import { checkAuth } from "@/app/actions/auth-service"
+import { OpenAIService } from "@/lib/openaiService"
+import MedicalDataEditor from "@/components/ui/medical-data-editor"
 import { 
   userDataService, 
   generateId, 
@@ -52,6 +54,9 @@ export default function MyDataPage() {
   const [selectedDocumentType, setSelectedDocumentType] = useState<DocumentType | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
+  const [editingRecord, setEditingRecord] = useState<MedicalRecord | null>(null)
+  const [editingCertificate, setEditingCertificate] = useState<DiagnosisCertificate | null>(null)
 
   // 檢查用戶登入狀態
   useEffect(() => {
@@ -102,6 +107,29 @@ export default function MyDataPage() {
     if (!fileData || !user?.id) return
 
     try {
+      setIsAnalyzing(true)
+      setUploadSuccess(`正在分析病歷檔案 "${fileData.filename}"...`)
+      
+      // 使用 OpenAI 分析醫療文件
+      let analyzedData = null
+      let analysisSucceeded = false
+      try {
+        const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || 'sk-temp'
+        if (apiKey === 'sk-temp') {
+          throw new Error('請先在設定頁面輸入有效的 OpenAI API 金鑰')
+        }
+        const openaiService = new OpenAIService(apiKey)
+        analyzedData = await openaiService.analyzeMedicalRecord(
+          fileData.text || '', 
+          fileData.base64
+        )
+        analysisSucceeded = true
+        setUploadSuccess(`正在儲存病歷檔案 "${fileData.filename}"...`)
+      } catch (aiError) {
+        console.warn('AI 分析失敗，使用預設值:', aiError)
+        setUploadSuccess(`AI 分析失敗，正在儲存病歷檔案 "${fileData.filename}"...`)
+      }
+
       const record: MedicalRecord = {
         id: generateId(),
         fileName: fileData.filename,
@@ -110,17 +138,30 @@ export default function MyDataPage() {
         uploadDate: new Date().toISOString(),
         fileSize: fileData.size,
         textContent: fileData.text,
-        imageBase64: fileData.base64
+        imageBase64: fileData.base64,
+        medicalInfo: analyzedData
       }
 
       await userDataService.saveMedicalRecord(user.id, record)
       await loadUserData()
       
-      setUploadSuccess(`病歷檔案 "${fileData.filename}" 上傳成功！`)
-      setTimeout(() => setUploadSuccess(null), 3000)
+      if (analysisSucceeded) {
+        setUploadSuccess(`✅ 病歷檔案 "${fileData.filename}" 上傳並 AI 分析完成！`)
+      } else {
+        setUploadSuccess(`⚠️ 病歷檔案 "${fileData.filename}" 上傳完成，但 AI 分析失敗`)
+      }
+      setTimeout(() => setUploadSuccess(null), 5000)
     } catch (error) {
       console.error('上傳病歷檔案失敗:', error)
-      setUploadError('上傳病歷檔案失敗，請稍後再試')
+      const errorMessage = (error as Error).message
+      if (errorMessage.includes('API 金鑰')) {
+        setUploadError('請先在帳號設定中輸入有效的 OpenAI API 金鑰')
+      } else {
+        setUploadError('上傳病歷檔案失敗，請稍後再試')
+      }
+      setTimeout(() => setUploadError(null), 5000)
+    } finally {
+      setIsAnalyzing(false)
     }
   }
 
@@ -156,6 +197,29 @@ export default function MyDataPage() {
     if (!fileData || !user?.id) return
 
     try {
+      setIsAnalyzing(true)
+      setUploadSuccess(`正在分析診斷證明 "${fileData.filename}"...`)
+      
+      // 使用 OpenAI 分析診斷證明
+      let analyzedData = null
+      let analysisSucceeded = false
+      try {
+        const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || 'sk-temp'
+        if (apiKey === 'sk-temp') {
+          throw new Error('請先在設定頁面輸入有效的 OpenAI API 金鑰')
+        }
+        const openaiService = new OpenAIService(apiKey)
+        analyzedData = await openaiService.analyzeDiagnosisCertificate(
+          fileData.text || '', 
+          fileData.base64
+        )
+        analysisSucceeded = true
+        setUploadSuccess(`正在儲存診斷證明 "${fileData.filename}"...`)
+      } catch (aiError) {
+        console.warn('AI 分析失敗，使用預設值:', aiError)
+        setUploadSuccess(`AI 分析失敗，正在儲存診斷證明 "${fileData.filename}"...`)
+      }
+
       const certificate: DiagnosisCertificate = {
         id: generateId(),
         fileName: fileData.filename,
@@ -164,17 +228,30 @@ export default function MyDataPage() {
         uploadDate: new Date().toISOString(),
         fileSize: fileData.size,
         textContent: fileData.text,
-        imageBase64: fileData.base64
+        imageBase64: fileData.base64,
+        diagnosisInfo: analyzedData
       }
 
       await userDataService.saveDiagnosisCertificate(user.id, certificate)
       await loadUserData()
       
-      setUploadSuccess(`診斷證明 "${fileData.filename}" 上傳成功！`)
-      setTimeout(() => setUploadSuccess(null), 3000)
+      if (analysisSucceeded) {
+        setUploadSuccess(`✅ 診斷證明 "${fileData.filename}" 上傳並 AI 分析完成！`)
+      } else {
+        setUploadSuccess(`⚠️ 診斷證明 "${fileData.filename}" 上傳完成，但 AI 分析失敗`)
+      }
+      setTimeout(() => setUploadSuccess(null), 5000)
     } catch (error) {
       console.error('上傳診斷證明失敗:', error)
-      setUploadError('上傳診斷證明失敗，請稍後再試')
+      const errorMessage = (error as Error).message
+      if (errorMessage.includes('API 金鑰')) {
+        setUploadError('請先在帳號設定中輸入有效的 OpenAI API 金鑰')
+      } else {
+        setUploadError('上傳診斷證明失敗，請稍後再試')
+      }
+      setTimeout(() => setUploadError(null), 5000)
+    } finally {
+      setIsAnalyzing(false)
     }
   }
 
@@ -229,6 +306,40 @@ export default function MyDataPage() {
   const handleFileError = (errorMessage: string) => {
     setUploadError(errorMessage)
     setTimeout(() => setUploadError(null), 5000)
+  }
+
+  // 儲存編輯的病歷資料
+  const handleSaveMedicalRecord = async (recordId: string, updatedData: any) => {
+    if (!user?.id) return
+    
+    try {
+      const record = medicalRecords.find(r => r.id === recordId)
+      if (record) {
+        const updatedRecord = { ...record, medicalInfo: updatedData }
+        await userDataService.saveMedicalRecord(user.id, updatedRecord)
+        await loadUserData()
+        setEditingRecord(null)
+      }
+    } catch (error) {
+      console.error('儲存病歷資料失敗:', error)
+    }
+  }
+
+  // 儲存編輯的診斷證明資料
+  const handleSaveDiagnosisCertificate = async (certificateId: string, updatedData: any) => {
+    if (!user?.id) return
+    
+    try {
+      const certificate = diagnosisCertificates.find(c => c.id === certificateId)
+      if (certificate) {
+        const updatedCertificate = { ...certificate, diagnosisInfo: updatedData }
+        await userDataService.saveDiagnosisCertificate(user.id, updatedCertificate)
+        await loadUserData()
+        setEditingCertificate(null)
+      }
+    } catch (error) {
+      console.error('儲存診斷證明資料失敗:', error)
+    }
   }
 
   if (isLoading) {
@@ -524,6 +635,13 @@ export default function MyDataPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => setEditingRecord(record)}
+                    >
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => handleDeleteMedicalRecord(record.id)}
                       className="text-red-600 hover:text-red-700 hover:border-red-300"
                     >
@@ -667,16 +785,16 @@ export default function MyDataPage() {
                         <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                           <div>
                             <span className="text-gray-500">診斷日期: </span>
-                            <span className="font-medium">{certificate.diagnosisInfo.diagnosisDate}</span>
+                            <span className="font-medium">{certificate.diagnosisInfo.certificateDate}</span>
                           </div>
                           <div>
-                            <span className="text-gray-500">醫師: </span>
-                            <span className="font-medium">{certificate.diagnosisInfo.doctorName}</span>
+                            <span className="text-gray-500">病名: </span>
+                            <span className="font-medium">{certificate.diagnosisInfo.diseaseName}</span>
                           </div>
-                          {certificate.diagnosisInfo.diagnosis && (
+                          {certificate.diagnosisInfo.treatmentSummary && (
                             <div className="col-span-2">
-                              <span className="text-gray-500">診斷: </span>
-                              <span className="font-medium">{certificate.diagnosisInfo.diagnosis}</span>
+                              <span className="text-gray-500">治療摘要: </span>
+                              <span className="font-medium">{certificate.diagnosisInfo.treatmentSummary}</span>
                             </div>
                           )}
                         </div>
@@ -687,6 +805,13 @@ export default function MyDataPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingCertificate(certificate)}
+                    >
+                      <Settings className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -833,10 +958,22 @@ export default function MyDataPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <UploadZone 
-                    onFileProcessed={(fileData) => handleFileUpload(fileData, selectedDocumentType)}
-                    onError={handleFileError}
-                  />
+                  {isAnalyzing ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <div className="flex items-center space-x-2">
+                        <RefreshCw className="h-6 w-6 animate-spin text-blue-600" />
+                        <span className="text-lg font-medium text-blue-600">AI 分析處理中...</span>
+                      </div>
+                      <p className="text-sm text-gray-500 text-center max-w-md">
+                        正在使用 OpenAI 分析您的文件內容，這可能需要幾秒鐘時間，請耐心等候。
+                      </p>
+                    </div>
+                  ) : (
+                    <UploadZone 
+                      onFileProcessed={(fileData) => handleFileUpload(fileData, selectedDocumentType)}
+                      onError={handleFileError}
+                    />
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -852,6 +989,41 @@ export default function MyDataPage() {
           </Alert>
         </TabsContent>
       </Tabs>
+
+      {/* 編輯模態視窗 */}
+      {editingRecord && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-4">
+              <h2 className="text-lg font-semibold">編輯病歷資料</h2>
+            </div>
+            <div className="p-6">
+              <MedicalDataEditor
+                record={editingRecord}
+                onSave={(data) => handleSaveMedicalRecord(editingRecord.id, data)}
+                onCancel={() => setEditingRecord(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingCertificate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-4">
+              <h2 className="text-lg font-semibold">編輯診斷證明</h2>
+            </div>
+            <div className="p-6">
+              <MedicalDataEditor
+                certificate={editingCertificate}
+                onSave={(data) => handleSaveDiagnosisCertificate(editingCertificate.id, data)}
+                onCancel={() => setEditingCertificate(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

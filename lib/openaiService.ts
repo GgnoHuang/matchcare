@@ -72,10 +72,12 @@ export class OpenAIService {
 
     // 如果有圖片，加入圖片內容
     if (imageBase64) {
-      (messages[0].content as any).push({
+      // 確保 base64 格式正確
+      const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`
+      ;(messages[0].content as any).push({
         type: "image_url",
         image_url: {
-          url: imageBase64
+          url: imageUrl
         }
       });
     }
@@ -329,7 +331,7 @@ ${policyImageBase64 ? '請仔細分析保單圖片中的所有條款內容，包
         role: "user",
         content: imageBase64 ? [
           { type: "text", text: prompt },
-          { type: "image_url", image_url: { url: imageBase64 } }
+          { type: "image_url", image_url: { url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}` } }
         ] : prompt
       }
     ];
@@ -399,6 +401,172 @@ ${policyImageBase64 ? '請仔細分析保單圖片中的所有條款內容，包
       priority: resource.priority || 'medium',
       status: resource.status || 'eligible'
     }));
+  }
+
+  /**
+   * 分析診斷證明文件
+   */
+  async analyzeDiagnosisCertificate(text: string, imageBase64: string | null = null): Promise<any> {
+    const prompt = `你是一位專業的醫療文件分析師。請從診斷證明中提取以下資訊，如果找不到相關資訊請填入"待輸入"：
+
+${text ? `文字內容：\n${text}\n` : ''}
+${imageBase64 ? '請仔細分析圖片中的診斷證明內容。\n' : ''}
+
+請提取以下資訊並以JSON格式回傳：
+{
+  "patientName": "病人姓名",
+  "birthDate": "出生年月日",
+  "idNumber": "身分證字號", 
+  "firstVisitDate": "初診日",
+  "certificateDate": "開立診斷書日期",
+  "icdCode": "ICD-10診斷碼",
+  "diseaseName": "病名",
+  "treatmentSummary": "醫療處置摘要",
+  "restPeriod": "建議休養時間",
+  "isAccident": "是否因意外"
+}`;
+
+    const messages = [
+      { role: 'user', content: prompt }
+    ];
+
+    if (imageBase64) {
+      // 確保 base64 格式正確
+      const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`
+      messages[0].content = [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: imageUrl } }
+      ];
+    }
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: imageBase64 ? 'gpt-4o-mini' : 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.1,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API 錯誤: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      
+      // 嘗試解析JSON
+      try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      } catch (e) {
+        console.warn('無法解析JSON，返回原始內容');
+      }
+      
+      // 如果解析失敗，返回預設結構
+      return {
+        patientName: "待輸入",
+        birthDate: "待輸入", 
+        idNumber: "待輸入",
+        firstVisitDate: "待輸入",
+        certificateDate: "待輸入",
+        icdCode: "待輸入",
+        diseaseName: "待輸入",
+        treatmentSummary: "待輸入",
+        restPeriod: "待輸入",
+        isAccident: "待輸入"
+      };
+    } catch (error) {
+      console.error('診斷證明分析錯誤:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 分析病例記錄文件
+   */
+  async analyzeMedicalRecord(text: string, imageBase64: string | null = null): Promise<any> {
+    const prompt = `你是一位專業的醫療文件分析師。請從病例記錄中提取以下資訊，如果找不到相關資訊請填入"待輸入"：
+
+${text ? `文字內容：\n${text}\n` : ''}
+${imageBase64 ? '請仔細分析圖片中的病例記錄內容。\n' : ''}
+
+請提取以下資訊並以JSON格式回傳：
+{
+  "clinicalRecord": "門診/急診/住院紀錄",
+  "admissionRecord": "入院病歷", 
+  "surgeryRecord": "手術紀錄",
+  "examinationReport": "檢查報告影本",
+  "medicationRecord": "用藥紀錄",
+  "dischargeSummary": "出院病摘",
+  "hospitalStamp": "醫療院所章戳與簽名"
+}`;
+
+    const messages = [
+      { role: 'user', content: prompt }
+    ];
+
+    if (imageBase64) {
+      // 確保 base64 格式正確
+      const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`
+      messages[0].content = [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: imageUrl } }
+      ];
+    }
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: imageBase64 ? 'gpt-4o-mini' : 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.1,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API 錯誤: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      
+      // 嘗試解析JSON
+      try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      } catch (e) {
+        console.warn('無法解析JSON，返回原始內容');
+      }
+      
+      // 如果解析失敗，返回預設結構
+      return {
+        clinicalRecord: "待輸入",
+        admissionRecord: "待輸入",
+        surgeryRecord: "待輸入", 
+        examinationReport: "待輸入",
+        medicationRecord: "待輸入",
+        dischargeSummary: "待輸入",
+        hospitalStamp: "待輸入"
+      };
+    } catch (error) {
+      console.error('病例記錄分析錯誤:', error);
+      throw error;
+    }
   }
 
   /**

@@ -32,14 +32,28 @@ export interface BaseDocument {
 export interface MedicalRecord extends BaseDocument {
   documentType: 'medical'
   
-  // AI分析結果
-  aiAnalysis?: {
-    disease: string
-    severity: string
-    treatmentStage: string
-    estimatedCost: string
-    careNeeds: string
-    familyImpact: string
+  // 病例記錄 AI 分析資訊
+  medicalInfo?: {
+    // 門診/急診/住院紀錄
+    clinicalRecord?: string
+    
+    // 入院病歷
+    admissionRecord?: string
+    
+    // 手術紀錄
+    surgeryRecord?: string
+    
+    // 檢查報告影本
+    examinationReport?: string
+    
+    // 用藥紀錄
+    medicationRecord?: string
+    
+    // 出院病摘
+    dischargeSummary?: string
+    
+    // 醫療院所章戳與簽名
+    hospitalStamp?: string
   }
 }
 
@@ -63,15 +77,29 @@ export interface InsurancePolicy extends BaseDocument {
 export interface DiagnosisCertificate extends BaseDocument {
   documentType: 'diagnosis'
   
-  // 診斷證明特有資訊
+  // 診斷證明 AI 分析資訊
   diagnosisInfo?: {
-    diagnosisDate: string
-    doctorName: string
-    hospitalName: string
-    diagnosis: string
-    diseaseCode?: string // ICD-10 代碼
-    treatmentPeriod?: string
-    workCapacity?: string // 工作能力評估
+    // 病人基本資料
+    patientName?: string
+    birthDate?: string
+    idNumber?: string
+    
+    // 診斷日期
+    firstVisitDate?: string
+    certificateDate?: string
+    
+    // 疾病名稱
+    icdCode?: string
+    diseaseName?: string
+    
+    // 醫療處置摘要
+    treatmentSummary?: string
+    
+    // 建議休養時間
+    restPeriod?: string
+    
+    // 是否因意外
+    isAccident?: string
   }
 }
 
