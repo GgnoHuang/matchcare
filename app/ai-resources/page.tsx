@@ -1143,10 +1143,6 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                       </ul>
                     </div>
                   </div>
-                  <Button onClick={startAnalysis} className="w-full gap-2 bg-blue-600 hover:bg-blue-700">
-                    <Brain className="h-4 w-4" />
-                    開始AI資源分析
-                  </Button>
                 </div>
               </CardContent>
             </Card>
