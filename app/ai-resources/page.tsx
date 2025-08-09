@@ -59,6 +59,7 @@ export default function AIResourcesPage() {
   const [apiKey, setApiKey] = useState("")
   const [selectedMedicalFile, setSelectedMedicalFile] = useState<SelectedFileData | null>(null)
   const [selectedPolicyFile, setSelectedPolicyFile] = useState<SelectedFileData | null>(null)
+  const [selectedDiagnosisFile, setSelectedDiagnosisFile] = useState<SelectedFileData | null>(null)
   const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null)
   const [aiGeneratedResources, setAiGeneratedResources] = useState<ResourceItem[]>([])
   const [analysisMode, setAnalysisMode] = useState<'demo' | 'real'>('demo')
@@ -160,6 +161,16 @@ export default function AIResourcesPage() {
         }
       }
 
+      // 提取診斷證明文字
+      let diagnosisText = ''
+      if (selectedDiagnosisFile) {
+        if (selectedDiagnosisFile.fileType === 'pdf' && selectedDiagnosisFile.textContent) {
+          diagnosisText = selectedDiagnosisFile.textContent
+        } else if (selectedDiagnosisFile.fileType === 'image') {
+          diagnosisText = "請從診斷證明圖片中分析診斷資訊"
+        }
+      }
+
       // 模擬案例資料（實際應用中可以從表單獲取）
       const caseData: CaseData = {
         age: "未指定",
@@ -172,7 +183,14 @@ export default function AIResourcesPage() {
       console.log("第1步：基礎病例分析...")
       setAnalysisProgress(20)
       const medicalImageBase64 = selectedMedicalFile.fileType === 'image' ? selectedMedicalFile.imageBase64 : null
-      const medicalAnalysis = await openaiService.analyzeMedicalCase(medicalText, caseData, medicalImageBase64)
+      
+      // 將診斷證明內容合併到醫療分析中
+      let combinedMedicalText = medicalText
+      if (diagnosisText) {
+        combinedMedicalText += '\n\n=== 診斷證明資料 ===\n' + diagnosisText
+      }
+      
+      const medicalAnalysis = await openaiService.analyzeMedicalCase(combinedMedicalText, caseData, medicalImageBase64)
       console.log("病例分析結果:", medicalAnalysis)
 
       console.log("第2步：搜尋政府補助資源...")
@@ -217,7 +235,7 @@ export default function AIResourcesPage() {
 - **政府補助資源**: ${govResources.length} 項
 - **企業福利資源**: ${corpResources.length} 項
 - **保單理賠資源**: ${insResources.length} 項
-- **總計可用資源**: ${allResources.length} 項
+${selectedDiagnosisFile ? '- **診斷證明**: 已提供，用於輔助分析\n' : ''}- **總計可用資源**: ${allResources.length} 項
 
 ### 建議優先級
 ${allResources.filter(r => r.priority === 'high').length > 0 ? 
@@ -272,6 +290,12 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
   // 保單檔案選擇處理
   const handlePolicyFileSelected = (fileData: SelectedFileData | null) => {
     setSelectedPolicyFile(fileData)
+    setError(null)
+  }
+
+  // 診斷證明檔案選擇處理
+  const handleDiagnosisFileSelected = (fileData: SelectedFileData | null) => {
+    setSelectedDiagnosisFile(fileData)
     setError(null)
   }
 
@@ -735,6 +759,16 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                     fileType="insurance"
                     userId={user?.id || null}
                     onFileSelected={handlePolicyFileSelected}
+                    onError={handleFileError}
+                  />
+
+                  {/* 診斷證明選擇區域 */}
+                  <FileSelector
+                    label="診斷證明選擇（選填）"
+                    description="選擇已上傳的診斷證明或上傳新檔案，提供更完整的醫療資訊"
+                    fileType="diagnosis"
+                    userId={user?.id || null}
+                    onFileSelected={handleDiagnosisFileSelected}
                     onError={handleFileError}
                   />
                 </div>

@@ -6,11 +6,15 @@
  * 拆除時可以直接刪除整個 lib/storage/ 資料夾
  */
 
-// 病歷記錄
-export interface MedicalRecord {
+// 文件類型列舉
+export type DocumentType = 'medical' | 'insurance' | 'diagnosis'
+
+// 基礎文件介面
+export interface BaseDocument {
   id: string
   fileName: string
   fileType: 'pdf' | 'image'
+  documentType: DocumentType
   uploadDate: string
   fileSize: number
   
@@ -19,6 +23,14 @@ export interface MedicalRecord {
   
   // 圖片內容（base64格式）
   imageBase64?: string
+  
+  // 用戶備註
+  notes?: string
+}
+
+// 病歷記錄
+export interface MedicalRecord extends BaseDocument {
+  documentType: 'medical'
   
   // AI分析結果
   aiAnalysis?: {
@@ -29,24 +41,11 @@ export interface MedicalRecord {
     careNeeds: string
     familyImpact: string
   }
-  
-  // 用戶備註
-  notes?: string
 }
 
 // 保險保單
-export interface InsurancePolicy {
-  id: string
-  fileName: string
-  fileType: 'pdf' | 'image'
-  uploadDate: string
-  fileSize: number
-  
-  // 文字內容（PDF提取或OCR結果）
-  textContent?: string
-  
-  // 圖片內容（base64格式）
-  imageBase64?: string
+export interface InsurancePolicy extends BaseDocument {
+  documentType: 'insurance'
   
   // 保單基本資訊
   policyInfo?: {
@@ -58,9 +57,22 @@ export interface InsurancePolicy {
     startDate: string
     endDate: string
   }
+}
+
+// 診斷證明
+export interface DiagnosisCertificate extends BaseDocument {
+  documentType: 'diagnosis'
   
-  // 用戶備註
-  notes?: string
+  // 診斷證明特有資訊
+  diagnosisInfo?: {
+    diagnosisDate: string
+    doctorName: string
+    hospitalName: string
+    diagnosis: string
+    diseaseCode?: string // ICD-10 代碼
+    treatmentPeriod?: string
+    workCapacity?: string // 工作能力評估
+  }
 }
 
 // AI分析結果記錄
@@ -109,6 +121,7 @@ export interface UserSettings {
 export interface StorageStats {
   medicalRecords: number
   insurancePolicies: number
+  diagnosisCertificates: number
   analysisResults: number
   totalStorageUsed: number // bytes
   lastSyncDate?: string

@@ -13,8 +13,11 @@
 
 import { LocalStorageProvider } from './localStorage.provider'
 import { 
+  DocumentType,
+  BaseDocument,
   MedicalRecord, 
-  InsurancePolicy, 
+  InsurancePolicy,
+  DiagnosisCertificate,
   AnalysisResult, 
   UserSettings, 
   StorageStats 
@@ -31,6 +34,11 @@ export interface UserDataService {
   saveInsurancePolicy(userId: string, policy: InsurancePolicy): Promise<void>
   getInsurancePolicies(userId: string): Promise<InsurancePolicy[]>
   deleteInsurancePolicy(userId: string, policyId: string): Promise<void>
+  
+  // 診斷證明
+  saveDiagnosisCertificate(userId: string, certificate: DiagnosisCertificate): Promise<void>
+  getDiagnosisCertificates(userId: string): Promise<DiagnosisCertificate[]>
+  deleteDiagnosisCertificate(userId: string, certificateId: string): Promise<void>
   
   // AI分析結果
   saveAnalysisResult(userId: string, result: AnalysisResult): Promise<void>
@@ -83,7 +91,10 @@ export const formatDate = (dateString: string): string => {
 // 導出類型，方便其他模組使用
 export type { 
   MedicalRecord, 
-  InsurancePolicy, 
+  InsurancePolicy,
+  DiagnosisCertificate,
+  DocumentType,
+  BaseDocument,
   AnalysisResult, 
   UserSettings, 
   StorageStats 

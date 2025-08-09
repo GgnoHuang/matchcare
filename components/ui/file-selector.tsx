@@ -22,13 +22,15 @@ import {
   formatFileSize, 
   formatDate,
   MedicalRecord, 
-  InsurancePolicy 
+  InsurancePolicy,
+  DiagnosisCertificate,
+  DocumentType
 } from "@/lib/storage"
 
 interface FileSelectorProps {
   label: string
   description?: string
-  fileType: 'medical' | 'insurance'
+  fileType: DocumentType
   userId: string | null
   onFileSelected: (fileData: SelectedFileData | null) => void
   onError?: (error: string) => void
@@ -42,7 +44,7 @@ export interface SelectedFileData {
   textContent?: string
   imageBase64?: string
   // 如果是已存在的檔案，包含完整記錄
-  record?: MedicalRecord | InsurancePolicy
+  record?: MedicalRecord | InsurancePolicy | DiagnosisCertificate
 }
 
 export default function FileSelector({ 
@@ -55,7 +57,7 @@ export default function FileSelector({
 }: FileSelectorProps) {
   // 狀態管理
   const [activeTab, setActiveTab] = useState<'existing' | 'upload'>('existing')
-  const [existingFiles, setExistingFiles] = useState<(MedicalRecord | InsurancePolicy)[]>([])
+  const [existingFiles, setExistingFiles] = useState<(MedicalRecord | InsurancePolicy | DiagnosisCertificate)[]>([])
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null)
@@ -72,12 +74,14 @@ export default function FileSelector({
 
     try {
       setIsLoading(true)
-      let files: (MedicalRecord | InsurancePolicy)[] = []
+      let files: (MedicalRecord | InsurancePolicy | DiagnosisCertificate)[] = []
       
       if (fileType === 'medical') {
         files = await userDataService.getMedicalRecords(userId)
-      } else {
+      } else if (fileType === 'insurance') {
         files = await userDataService.getInsurancePolicies(userId)
+      } else if (fileType === 'diagnosis') {
+        files = await userDataService.getDiagnosisCertificates(userId)
       }
       
       // 按上傳日期降序排列
@@ -202,7 +206,7 @@ export default function FileSelector({
                 <div className="text-center py-8">
                   <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="font-medium text-gray-900 mb-2">
-                    尚未上傳{fileType === 'medical' ? '病歷' : '保單'}檔案
+                    尚未上傳{fileType === 'medical' ? '病歷' : fileType === 'insurance' ? '保單' : '診斷證明'}檔案
                   </h3>
                   <p className="text-gray-500 mb-4">
                     請先到「我的資料」頁面上傳檔案，或使用右側的「重新上傳」功能
@@ -215,7 +219,7 @@ export default function FileSelector({
               ) : (
                 <div className="space-y-3">
                   <Label className="text-sm font-medium text-gray-700">
-                    選擇要用於分析的{fileType === 'medical' ? '病歷' : '保單'}檔案：
+                    選擇要用於分析的{fileType === 'medical' ? '病歷' : fileType === 'insurance' ? '保單' : '診斷證明'}檔案：
                   </Label>
                   {existingFiles.map((file) => (
                     <Card 
@@ -267,7 +271,7 @@ export default function FileSelector({
             <TabsContent value="upload">
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-gray-700">
-                  上傳新的{fileType === 'medical' ? '病歷' : '保單'}檔案：
+                  上傳新的{fileType === 'medical' ? '病歷' : fileType === 'insurance' ? '保單' : '診斷證明'}檔案：
                 </Label>
                 <UploadZone 
                   onFileProcessed={handleUploadedFile}

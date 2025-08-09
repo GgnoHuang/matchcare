@@ -9,7 +9,8 @@
 
 import { 
   MedicalRecord, 
-  InsurancePolicy, 
+  InsurancePolicy,
+  DiagnosisCertificate,
   AnalysisResult, 
   UserSettings, 
   StorageStats 
@@ -128,6 +129,50 @@ export class LocalStorageProvider {
     }, Promise.resolve())
   }
 
+  // 診斷證明管理
+  async saveDiagnosisCertificate(userId: string, certificate: DiagnosisCertificate): Promise<void> {
+    return this.safeLocalStorageOperation(() => {
+      const key = this.getStorageKey(userId, 'diagnosis_certificates')
+      const existingCertificates = this.safeJSONParse<DiagnosisCertificate[]>(
+        localStorage.getItem(key), 
+        []
+      )
+      
+      // 更新或新增診斷證明
+      const index = existingCertificates.findIndex(c => c.id === certificate.id)
+      if (index >= 0) {
+        existingCertificates[index] = certificate
+      } else {
+        existingCertificates.push(certificate)
+      }
+      
+      localStorage.setItem(key, JSON.stringify(existingCertificates))
+    }, Promise.resolve())
+  }
+
+  async getDiagnosisCertificates(userId: string): Promise<DiagnosisCertificate[]> {
+    return this.safeLocalStorageOperation(() => {
+      const key = this.getStorageKey(userId, 'diagnosis_certificates')
+      return this.safeJSONParse<DiagnosisCertificate[]>(
+        localStorage.getItem(key), 
+        []
+      )
+    }, [])
+  }
+
+  async deleteDiagnosisCertificate(userId: string, certificateId: string): Promise<void> {
+    return this.safeLocalStorageOperation(() => {
+      const key = this.getStorageKey(userId, 'diagnosis_certificates')
+      const existingCertificates = this.safeJSONParse<DiagnosisCertificate[]>(
+        localStorage.getItem(key), 
+        []
+      )
+      
+      const filteredCertificates = existingCertificates.filter(c => c.id !== certificateId)
+      localStorage.setItem(key, JSON.stringify(filteredCertificates))
+    }, Promise.resolve())
+  }
+
   // AI分析結果管理
   async saveAnalysisResult(userId: string, result: AnalysisResult): Promise<void> {
     return this.safeLocalStorageOperation(() => {
@@ -203,17 +248,20 @@ export class LocalStorageProvider {
     return this.safeLocalStorageOperation(async () => {
       const medicalRecords = await this.getMedicalRecords(userId)
       const insurancePolicies = await this.getInsurancePolicies(userId)
+      const diagnosisCertificates = await this.getDiagnosisCertificates(userId)
       const analysisResults = await this.getAnalysisResults(userId)
       
       // 估算儲存大小（簡單計算）
       const totalStorageUsed = 
         JSON.stringify(medicalRecords).length +
         JSON.stringify(insurancePolicies).length +
+        JSON.stringify(diagnosisCertificates).length +
         JSON.stringify(analysisResults).length
       
       return {
         medicalRecords: medicalRecords.length,
         insurancePolicies: insurancePolicies.length,
+        diagnosisCertificates: diagnosisCertificates.length,
         analysisResults: analysisResults.length,
         totalStorageUsed,
         lastSyncDate: new Date().toISOString()
@@ -221,6 +269,7 @@ export class LocalStorageProvider {
     }, {
       medicalRecords: 0,
       insurancePolicies: 0,
+      diagnosisCertificates: 0,
       analysisResults: 0,
       totalStorageUsed: 0
     })
