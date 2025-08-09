@@ -162,13 +162,16 @@ ${medicalText}
   /**
    * 第1步：基礎病例分析
    */
-  async analyzeMedicalCase(medicalText: string, caseData: CaseData): Promise<MedicalAnalysisResult> {
-    const prompt = `你是一位專業的醫療分析師。請分析以下病例資料，提取關鍵醫療資訊：
+  async analyzeMedicalCase(medicalText: string, caseData: CaseData, imageBase64: string | null = null): Promise<MedicalAnalysisResult> {
+    const prompt = `你是一位專業的醫療分析師。請分析以下醫療資料，提取關鍵醫療資訊：
 
-病例內容：
+${medicalText ? `病例文字內容：
 ---
 ${medicalText}
 ---
+` : ''}
+
+${imageBase64 ? '請仔細分析圖片中的醫療資訊，包括診斷報告、檢查結果、醫師建議、處方箋、表格數據等所有可見內容。' : ''}
 
 患者資料：
 年齡: ${caseData.age}
@@ -176,7 +179,7 @@ ${medicalText}
 疾病: ${caseData.disease}
 治療: ${caseData.treatment}
 
-請以以下 JSON 格式回覆：
+請根據所有可獲得的資訊（文字和圖片），以以下 JSON 格式回覆：
 {
   "disease": "主要疾病診斷",
   "severity": "嚴重程度 (輕微/中度/重度/危急)",
@@ -186,7 +189,7 @@ ${medicalText}
   "familyImpact": "對家庭經濟的影響程度"
 }`;
 
-    const response = await this.callAPI(prompt, 'gpt-3.5-turbo');
+    const response = await this.callAPI(prompt, 'gpt-4o-mini', imageBase64);
     return this.parseJSONResponse(response.content);
   }
 
@@ -227,7 +230,7 @@ ${medicalText}
   ]
 }`;
 
-    const response = await this.callAPI(prompt, 'gpt-3.5-turbo');
+    const response = await this.callAPI(prompt, 'gpt-4o-mini');
     const result = this.parseJSONResponse(response.content);
     return this.formatResources(result.resources || [], 'gov');
   }
@@ -268,7 +271,7 @@ ${medicalText}
   ]
 }`;
 
-    const response = await this.callAPI(prompt, 'gpt-3.5-turbo');
+    const response = await this.callAPI(prompt, 'gpt-4o-mini');
     const result = this.parseJSONResponse(response.content);
     return this.formatResources(result.resources || [], 'corp');
   }
@@ -276,7 +279,7 @@ ${medicalText}
   /**
    * 第4步：分析保單理賠資源
    */
-  async analyzeInsuranceClaims(medicalAnalysis: MedicalAnalysisResult, policyText: string): Promise<ResourceItem[]> {
+  async analyzeInsuranceClaims(medicalAnalysis: MedicalAnalysisResult, policyText: string, policyImageBase64: string | null = null): Promise<ResourceItem[]> {
     const prompt = `請比對病例與保單條款，分析可理賠項目：
 
 病例分析：
@@ -285,10 +288,13 @@ ${medicalText}
 - 治療階段：${medicalAnalysis.treatmentStage}
 - 預估費用：${medicalAnalysis.estimatedCost}
 
-保單條款：
+${policyText ? `保單條款文字：
 ---
 ${policyText}
 ---
+` : ''}
+
+${policyImageBase64 ? '請仔細分析保單圖片中的所有條款內容，包括保障項目、理賠條件、給付金額、免責條款等。' : ''}
 
 請分析可理賠的項目，以 JSON 格式回覆：
 {
@@ -309,7 +315,7 @@ ${policyText}
   ]
 }`;
 
-    const response = await this.callAPI(prompt, 'gpt-4o');
+    const response = await this.callAPI(prompt, 'gpt-4o-mini', policyImageBase64);
     const result = this.parseJSONResponse(response.content);
     return this.formatResources(result.resources || [], 'ins');
   }
@@ -317,11 +323,14 @@ ${policyText}
   /**
    * 統一的 API 調用方法
    */
-  private async callAPI(prompt: string, model: string = 'gpt-3.5-turbo'): Promise<AnalysisResult> {
+  private async callAPI(prompt: string, model: string = 'gpt-4o-mini', imageBase64: string | null = null): Promise<AnalysisResult> {
     const messages = [
       {
         role: "user",
-        content: prompt
+        content: imageBase64 ? [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: imageBase64 } }
+        ] : prompt
       }
     ];
 
@@ -337,7 +346,7 @@ ${policyText}
         body: JSON.stringify({
           model: model,
           messages: messages,
-          max_tokens: model.includes('gpt-4') ? 1500 : 1000,
+          max_tokens: model.includes('gpt-4') ? 4000 : 1000,
           temperature: 0.3
         })
       });

@@ -3,13 +3,19 @@
  * 使用 PDF.js 提取 PDF 文字內容
  */
 
-import * as pdfjsLib from 'pdfjs-dist';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 
-// 設定 PDF.js worker - 提供多個備案
-if (typeof window !== 'undefined') {
+// 動態導入 PDF.js，避免 SSR 問題
+const loadPDFJS = async () => {
+  if (typeof window === 'undefined') {
+    // 服務端環境，返回 null
+    return null;
+  }
+  
+  const pdfjsLib = await import('pdfjs-dist');
   pdfjsLib.GlobalWorkerOptions.workerSrc = `${window.location.origin}/pdf.worker.min.js`;
-}
+  return pdfjsLib;
+};
 
 export class PDFUtils {
   /**
@@ -19,6 +25,16 @@ export class PDFUtils {
    */
   static async extractTextFromPDF(file: File): Promise<string> {
     try {
+      // 檢查是否在客戶端環境
+      if (typeof window === 'undefined') {
+        throw new Error('PDF 處理只能在客戶端執行');
+      }
+
+      const pdfjsLib = await loadPDFJS();
+      if (!pdfjsLib) {
+        throw new Error('無法載入 PDF.js');
+      }
+
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
       let fullText = '';

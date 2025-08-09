@@ -153,7 +153,8 @@ export default function AIResourcesPage() {
 
       console.log("第1步：基礎病例分析...")
       setAnalysisProgress(20)
-      const medicalAnalysis = await openaiService.analyzeMedicalCase(medicalText, caseData)
+      const medicalImageBase64 = uploadedFile.type === 'image' ? uploadedFile.base64 : null
+      const medicalAnalysis = await openaiService.analyzeMedicalCase(medicalText, caseData, medicalImageBase64)
       console.log("病例分析結果:", medicalAnalysis)
 
       console.log("第2步：搜尋政府補助資源...")
@@ -167,10 +168,11 @@ export default function AIResourcesPage() {
       console.log("企業福利資源:", corpResources)
 
       let insResources: ResourceItem[] = []
-      if (policyFile && policyText) {
+      if (policyFile) {
         console.log("第4步：分析保單理賠資源...")
         setAnalysisProgress(80)
-        insResources = await openaiService.analyzeInsuranceClaims(medicalAnalysis, policyText)
+        const policyImageBase64 = policyFile.type === 'image' ? policyFile.base64 : null
+        insResources = await openaiService.analyzeInsuranceClaims(medicalAnalysis, policyText, policyImageBase64)
         console.log("保單理賠資源:", insResources)
       } else {
         console.log("跳過保單分析（無上傳保單）")

@@ -21,7 +21,8 @@ export async function quickLogin(phoneNumber = "0912345678") {
   }
 
   // 設置身份驗證 cookie (24 小時有效)
-  cookies().set("auth", JSON.stringify(user), {
+  const cookieStore = await cookies()
+  cookieStore.set("auth", JSON.stringify(user), {
     expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
     path: "/",
   })
@@ -32,7 +33,8 @@ export async function quickLogin(phoneNumber = "0912345678") {
 // 檢查用戶是否已登入
 export async function checkAuth() {
   try {
-    const authCookie = cookies().get("auth")
+    const cookieStore = await cookies()
+    const authCookie = cookieStore.get("auth")
 
     if (!authCookie?.value) {
       return { isLoggedIn: false }
@@ -46,7 +48,8 @@ export async function checkAuth() {
       }
     } catch (e) {
       // JSON 解析錯誤，cookie 可能損壞
-      cookies().delete("auth")
+      const cookieStoreForDelete = await cookies()
+      cookieStoreForDelete.delete("auth")
       return { isLoggedIn: false }
     }
   } catch (error) {
@@ -58,7 +61,8 @@ export async function checkAuth() {
 // 登出
 export async function logout() {
   try {
-    cookies().delete("auth")
+    const cookieStore = await cookies()
+    cookieStore.delete("auth")
     return { success: true }
   } catch (error) {
     console.error("登出失敗:", error)
