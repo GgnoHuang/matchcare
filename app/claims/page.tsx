@@ -162,9 +162,10 @@ export default function ClaimsPage() {
           ))}
         </TabsContent>
         <TabsContent value="pending" className="space-y-4">
-          {claims
-            .filter((c) => c.status === "pending")
-            .map((claim) => (
+          {claims.filter((c) => c.status === "pending").length > 0 ? (
+            claims
+              .filter((c) => c.status === "pending")
+              .map((claim) => (
               <Card key={claim.id} className="overflow-hidden">
                 <CardHeader className="pb-2">
                   <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-2">
@@ -219,12 +220,22 @@ export default function ClaimsPage() {
                   </div>
                 </CardFooter>
               </Card>
-            ))}
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Clock className="h-10 w-10 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">暫無處理中的申請</h3>
+              <p className="text-gray-500">目前沒有正在處理中的理賠申請</p>
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="approved" className="space-y-4">
-          {claims
-            .filter((c) => c.status === "approved")
-            .map((claim) => (
+          {claims.filter((c) => c.status === "approved").length > 0 ? (
+            claims
+              .filter((c) => c.status === "approved")
+              .map((claim) => (
               <Card key={claim.id} className="overflow-hidden">
                 <CardHeader className="pb-2">
                   <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-2">
@@ -282,12 +293,22 @@ export default function ClaimsPage() {
                   </div>
                 </CardFooter>
               </Card>
-            ))}
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <CheckCircle2 className="h-10 w-10 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">暫無已核准的申請</h3>
+              <p className="text-gray-500">目前沒有已核准的理賠申請</p>
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="rejected" className="space-y-4">
-          {claims
-            .filter((c) => c.status === "rejected")
-            .map((claim) => (
+          {claims.filter((c) => c.status === "rejected").length > 0 ? (
+            claims
+              .filter((c) => c.status === "rejected")
+              .map((claim) => (
               <Card key={claim.id} className="overflow-hidden">
                 <CardHeader className="pb-2">
                   <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-2">
@@ -342,9 +363,17 @@ export default function ClaimsPage() {
                   </div>
                 </CardFooter>
               </Card>
-            ))}
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <XCircle className="h-10 w-10 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">暫無被拒絕的申請</h3>
+              <p className="text-gray-500">目前沒有被拒絕的理賠申請</p>
+            </div>
+          )}
         </TabsContent>
-        {/* 其他標籤內容類似，只是過濾不同狀態的申請 */}
       </Tabs>
     </div>
   )
