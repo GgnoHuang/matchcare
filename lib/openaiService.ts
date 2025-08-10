@@ -728,25 +728,66 @@ ${imageBase64 ? '請仔細分析圖片中的病例記錄內容。\n' : ''}
     const matchedPolicies: any[] = [];
     
     for (const policy of userPolicies) {
-      // 搜尋保單條款、保障項目等相關內容
-      const policyText = JSON.stringify(policy.data || policy);
-      const searchResult = await this.analyzePolicyMatch(searchTerm, policyText, policy);
+      console.log(`分析保單: ${policy.fileName || policy.id}`, policy);
+      
+      // 組合完整的保單內容：原始文本 + 結構化資料
+      const originalText = policy.textContent || '';
+      const structuredData = JSON.stringify(policy.policyInfo || {}, null, 2);
+      
+      const fullPolicyContent = `
+=== 保單檔案: ${policy.fileName} ===
+
+=== 原始掃描內容 ===
+${originalText}
+
+=== AI分析的結構化資料 ===
+${structuredData}
+      `.trim();
+      
+      console.log(`完整保單內容長度: ${fullPolicyContent.length} 字元`);
+      
+      const searchResult = await this.analyzePolicyMatch(searchTerm, fullPolicyContent, policy);
       
       if (searchResult.hasMatch) {
+        const insuranceCompany = policy.policyInfo?.policyBasicInfo?.insuranceCompany || '未知保險公司';
+        
+        // 根據AI分析的信心度決定優先級
+        const priority = searchResult.confidenceLevel === 'high' ? 'high' : 
+                        searchResult.confidenceLevel === 'medium' ? 'medium' : 'low';
+        
+        // 組合詳細說明，包含專業分析
+        const detailedDescription = [
+          searchResult.details,
+          searchResult.medicalInsights ? `🔬 醫學分析：${searchResult.medicalInsights}` : '',
+          searchResult.exclusionRisk ? `⚠️ 注意事項：${searchResult.exclusionRisk}` : '',
+          searchResult.claimProcess ? `📋 理賠要點：${searchResult.claimProcess}` : ''
+        ].filter(Boolean).join('\n\n');
+
         matchedPolicies.push({
           id: `policy-${policy.id || Date.now()}`,
           category: "保單理賠",
-          subcategory: "個人保單",
-          title: searchResult.matchedItem,
-          organization: policy.data?.policyBasicInfo?.insuranceCompany || "保險公司",
-          eligibility: "符合保單條款",
-          amount: searchResult.coverageAmount,
+          subcategory: `個人保單 (${searchResult.matchType || '相關保障'})`,
+          title: searchResult.matchedItem || `${insuranceCompany} - ${searchTerm}相關保障`,
+          organization: `${insuranceCompany} | 來源：${policy.fileName}`,
+          eligibility: `符合保單條款 (可信度：${searchResult.confidenceLevel || 'medium'})`,
+          amount: searchResult.coverageAmount || "依保單條款",
           deadline: "依保單條款",
-          details: searchResult.details,
-          priority: "high",
+          details: detailedDescription,
+          priority: priority,
           status: "eligible",
-          matchedConditions: [searchTerm]
+          matchedConditions: [searchTerm],
+          sourcePolicy: policy.fileName,
+          aiAnalysis: {
+            confidenceLevel: searchResult.confidenceLevel,
+            matchType: searchResult.matchType,
+            medicalInsights: searchResult.medicalInsights,
+            exclusionRisk: searchResult.exclusionRisk
+          }
         });
+        
+        console.log(`找到匹配項目:`, searchResult);
+      } else {
+        console.log(`保單 ${policy.fileName} 無匹配項目`);
       }
     }
     
@@ -757,21 +798,55 @@ ${imageBase64 ? '請仔細分析圖片中的病例記錄內容。\n' : ''}
    * 分析保單是否匹配搜尋內容
    */
   private async analyzePolicyMatch(searchTerm: string, policyText: string, policy: any): Promise<any> {
-    const prompt = `請分析以下保單內容是否包含與「${searchTerm}」相關的理賠項目：
+    const prompt = `你是資深的保險理賠專家和醫療顧問，具備深厚的醫學知識和保險法規經驗。請運用專業智能分析以下保單，判斷與「${searchTerm}」的關聯性。
 
-保單內容：
+保單完整內容：
 ${policyText}
 
-請分析並以JSON格式回傳：
+## 專業分析要求：
+
+### 醫學知識應用
+- 分析「${searchTerm}」的醫學定義、分類、併發症
+- 識別相關疾病代碼(ICD-10)、同義詞、醫學術語
+- 考慮疾病進程：初期症狀 → 確診 → 治療 → 併發症 → 長期照護
+
+### 保險專業判斷
+- 解讀保單條款的法律用詞和隱含意義
+- 分析除外條款是否排除此疾病
+- 評估等待期、既往症條款的影響
+- 判斷不同險種的理賠適用性
+
+### 案例範例（供參考）：
+**糖尿病** → 可能關聯：
+- 直接：糖尿病住院醫療、糖尿病特定疾病險
+- 間接：腎臟病變、視網膜病變、心血管疾病併發症
+- 手術：截肢手術、眼底雷射、腎臟透析
+- 長照：糖尿病足護理、注射胰島素照護
+
+**達文西手術** → 可能關聯：
+- 直接：特定手術保險金、住院醫療險手術費
+- 間接：攝護腺癌、子宮肌瘤等疾病的手術治療
+- 材料費：機器手臂使用費、特殊醫材
+
+請以JSON格式提供專業分析：
 {
   "hasMatch": true/false,
-  "matchedItem": "匹配的理賠項目名稱",
-  "coverageAmount": "理賠金額或比例",
-  "details": "詳細理賠說明"
-}`;
+  "matchedItem": "具體理賠項目名稱",
+  "coverageAmount": "理賠金額/比例/條件",
+  "details": "專業分析說明：為什麼匹配、理賠條件、注意事項",
+  "confidenceLevel": "high/medium/low",
+  "matchType": "直接保障/併發症保障/相關手術保障/長期照護保障",
+  "medicalInsights": "醫學相關性說明",
+  "exclusionRisk": "可能的除外條款風險",
+  "claimProcess": "理賠申請時需注意的要點"
+}
+
+重要：這不是簡單的文字搜尋，而是基於醫學和保險專業知識的智能分析。`;
 
     try {
+      console.log(`發送保單分析請求，搜尋詞: ${searchTerm}`);
       const response = await this.callAPI(prompt, 'gpt-4o-mini');
+      console.log(`保單分析回應:`, response.content);
       return this.parseJSONResponse(response.content);
     } catch (error) {
       console.error('保單匹配分析失敗:', error);
