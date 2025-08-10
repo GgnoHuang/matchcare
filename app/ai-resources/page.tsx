@@ -1545,9 +1545,9 @@ function QuickSearchContent({
                   )}
                 </div>
 
-                {/* 新增「聽聽大家怎麼說」按鈕 */}
+                {/* 新增「聽聽大家怎麼說」按鈕 - 使用AI搜尋的真實資料 */}
                 <div className="mt-6 flex justify-center">
-                  <Link href={`/ai-resources/analysis/${treatment.id}`} target="_blank">
+                  <Link href={`/ai-resources/analysis/${encodeURIComponent(quickSearchTerm)}`} target="_blank">
                     <Button className="gap-2 bg-blue-600 hover:bg-blue-700 shadow-md">
                       <MessageSquare className="h-4 w-4" />
                       聽聽大家怎麼說
