@@ -80,6 +80,7 @@ private generateImageUrl(imageBase64: string): string {
 - 圖片分析模型升級: `gpt-4o-mini` → `gpt-4o` (更佳OCR能力)
 - 結構化提示詞使用markdown格式
 - 明確指示只在無法識別時才填"待輸入"
+- **修復AI自動比對圖片處理**: `callAPI` 方法現在使用 `generateImageUrl` 而非硬編碼JPEG格式
 
 ### ✅ 智能保單搜尋功能 (已完成)
 **檔案**: `/lib/openaiService.ts`
