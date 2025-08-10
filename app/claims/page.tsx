@@ -1,46 +1,90 @@
+"use client"
+
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FileText, Plus, FileSearch, Clock, CheckCircle2, XCircle } from "lucide-react"
+import { FileText, Plus, FileSearch, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useState, useEffect } from "react"
+import { checkAuth } from "@/app/actions/auth-service"
+
+interface Claim {
+  id: string
+  company: string
+  policyNumber: string
+  diagnosis: string
+  hospital: string
+  date: string
+  status: 'pending' | 'approved' | 'rejected'
+  amount: number | null
+  reason?: string
+}
+
+interface User {
+  id: string
+  name: string
+}
 
 export default function ClaimsPage() {
-  const claims = [
-    {
-      id: "CL-20240424-001",
-      company: "國泰人壽",
-      policyNumber: "CT-MED-123456",
-      diagnosis: "乳癌第二期",
-      hospital: "台大醫院",
-      date: "2024-04-24",
-      status: "pending",
-      amount: null,
-    },
-    {
-      id: "CL-20240315-002",
-      company: "新光人壽",
-      policyNumber: "SK-CI-789012",
-      diagnosis: "心臟病",
-      hospital: "榮總",
-      date: "2024-03-15",
-      status: "approved",
-      amount: 1000000,
-    },
-    {
-      id: "CL-20240210-003",
-      company: "富邦人壽",
-      policyNumber: "FB-PA-345678",
-      diagnosis: "骨折",
-      hospital: "三軍總醫院",
-      date: "2024-02-10",
-      status: "rejected",
-      amount: null,
-      reason: "不符合保單條款規定的骨折類型",
-    },
-  ]
+  const [claims, setClaims] = useState<Claim[]>([])
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const getStatusBadge = (status) => {
+  // 檢查用戶登入狀態
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const { isLoggedIn, user: authUser } = await checkAuth()
+        if (isLoggedIn && authUser) {
+          setUser(authUser)
+          console.log('用戶已登入:', authUser)
+        } else {
+          console.log('用戶未登入')
+        }
+      } catch (error) {
+        console.error('獲取用戶資訊失敗:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchUser()
+  }, [])
+
+  // 當用戶登入後載入理賠申請資料
+  useEffect(() => {
+    if (user?.id) {
+      loadUserClaims()
+    }
+  }, [user])
+
+  const loadUserClaims = async () => {
+    if (!user?.id) return
+    
+    try {
+      console.log('載入用戶理賠申請資料，用戶ID:', user.id)
+      
+      // 從 localStorage 讀取理賠申請資料
+      const storageKey = `matchcare_${user.id}_claims`
+      const claimsData = localStorage.getItem(storageKey)
+      console.log('理賠申請資料 localStorage key:', storageKey, claimsData)
+      
+      if (claimsData) {
+        const parsedClaims = JSON.parse(claimsData)
+        setClaims(parsedClaims)
+        console.log('載入的理賠申請資料:', parsedClaims)
+      } else {
+        console.log('未找到理賠申請資料，設為空陣列')
+        setClaims([])
+      }
+    } catch (error) {
+      console.error('載入理賠申請資料失敗:', error)
+      setClaims([])
+    }
+  }
+
+  const getStatusBadge = (status: Claim['status']) => {
     switch (status) {
       case "pending":
         return (
@@ -57,7 +101,7 @@ export default function ClaimsPage() {
     }
   }
 
-  const getStatusIcon = (status) => {
+  const getStatusIcon = (status: Claim['status']) => {
     switch (status) {
       case "pending":
         return <Clock className="h-5 w-5 text-yellow-500" />
@@ -68,6 +112,42 @@ export default function ClaimsPage() {
       default:
         return null
     }
+  }
+
+  // Loading狀態
+  if (isLoading) {
+    return (
+      <div className="container py-6 md:py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">載入中...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 未登入狀態
+  if (!user) {
+    return (
+      <div className="container py-6 md:py-8">
+        <div className="max-w-md mx-auto text-center">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>需要登入</AlertTitle>
+            <AlertDescription>
+              請先登入以查看您的理賠申請記錄。
+              <div className="mt-4">
+                <Link href="/login">
+                  <Button>前往登入</Button>
+                </Link>
+              </div>
+            </AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -95,7 +175,7 @@ export default function ClaimsPage() {
           <TabsTrigger value="rejected">已拒絕</TabsTrigger>
         </TabsList>
         <TabsContent value="all" className="space-y-4">
-          {claims.map((claim) => (
+          {claims.length > 0 ? claims.map((claim) => (
             <Card key={claim.id} className="overflow-hidden">
               <CardHeader className="pb-2">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-2">
@@ -147,7 +227,7 @@ export default function ClaimsPage() {
                     {getStatusIcon(claim.status)}
                     <p className="text-sm">
                       {claim.status === "pending" && "處理中，預計 5-7 個工作天完成審核"}
-                      {claim.status === "approved" && `已核准，理賠金額: ${claim.amount.toLocaleString()} 元`}
+                      {claim.status === "approved" && `已核准，理賠金額: ${claim.amount?.toLocaleString()} 元`}
                       {claim.status === "rejected" && `已拒絕，原因: ${claim.reason}`}
                     </p>
                   </div>
@@ -159,7 +239,20 @@ export default function ClaimsPage() {
                 </div>
               </CardFooter>
             </Card>
-          ))}
+          )) : (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium mb-2">尚未建立任何理賠申請</h3>
+                <p className="text-gray-500 mb-4">
+                  您目前沒有任何理賠申請記錄，點擊下方按鈕開始您的第一個理賠申請
+                </p>
+                <Link href="/claims/new">
+                  <Button>建立理賠申請</Button>
+                </Link>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
         <TabsContent value="pending" className="space-y-4">
           {claims.filter((c) => c.status === "pending").length > 0 ? (
@@ -285,7 +378,7 @@ export default function ClaimsPage() {
                   <div className="flex flex-col md:flex-row md:justify-between md:items-center w-full gap-4">
                     <div className="flex items-center gap-2">
                       {getStatusIcon(claim.status)}
-                      <p className="text-sm">已核准，理賠金額: {claim.amount.toLocaleString()} 元</p>
+                      <p className="text-sm">已核准，理賠金額: {claim.amount?.toLocaleString()} 元</p>
                     </div>
                     <Button size="sm" variant="outline" className="w-full md:w-auto">
                       查看理賠明細

@@ -130,14 +130,52 @@ export default function NewClaimPage() {
   }
 
   const handleSubmit = () => {
+    if (!user || !selectedMedicalRecord || selectedPolicies.length === 0) {
+      return
+    }
+
     setIsSubmitting(true)
     setProgress(0)
+
+    // 創建理賠申請資料
+    const claimId = `CL-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`
+    const newClaim = {
+      id: claimId,
+      company: selectedPolicies.map(p => p.company).join(', '),
+      policyNumber: selectedPolicies.map(p => p.policyNumber).join(', '),
+      diagnosis: selectedMedicalRecord.diagnosis,
+      hospital: selectedMedicalRecord.hospital,
+      date: new Date().toISOString().slice(0, 10),
+      status: 'pending' as const,
+      amount: selectedPolicies.reduce((sum, p) => sum + p.totalEstimatedAmount, 0) || null,
+      createdAt: new Date().toISOString(),
+      medicalRecordId: selectedMedicalRecord.id,
+      policyIds: selectedPolicies.map(p => p.id),
+      selectedMedicalRecord,
+      selectedPolicies
+    }
 
     // 模擬提交過程
     const submitInterval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
           clearInterval(submitInterval)
+          
+          try {
+            // 儲存理賠申請資料到localStorage
+            const storageKey = `matchcare_${user.id}_claims`
+            const existingClaims = localStorage.getItem(storageKey)
+            const claimsArray = existingClaims ? JSON.parse(existingClaims) : []
+            
+            claimsArray.push(newClaim)
+            localStorage.setItem(storageKey, JSON.stringify(claimsArray))
+            
+            console.log('理賠申請已儲存:', claimId, newClaim)
+            console.log('儲存位置:', storageKey)
+          } catch (error) {
+            console.error('儲存理賠申請失敗:', error)
+          }
+          
           setIsSubmitting(false)
           setIsSubmitted(true)
           setStep(4)

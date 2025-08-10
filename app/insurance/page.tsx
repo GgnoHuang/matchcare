@@ -1,13 +1,237 @@
+"use client"
+
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Shield, Upload, Plus, Calendar, Banknote, AlertCircle, Sparkles, BookOpen } from "lucide-react"
+import { Shield, Upload, Plus, Calendar, Banknote, AlertCircle, Sparkles, BookOpen, FileSearch } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useState, useEffect } from "react"
+import { checkAuth } from "@/app/actions/auth-service"
+import { userDataService } from "@/lib/storage"
+
+interface InsurancePolicy {
+  id: string
+  company: string
+  name: string
+  type: string
+  policyNumber: string
+  startDate?: string
+  endDate?: string
+  coverage: Array<{
+    type: string
+    amount: number
+    unit: string
+    maxDays?: number
+  }>
+  matchedRecords: number
+  fileName?: string
+  uploadDate?: string
+  originalData?: any
+}
+
+interface User {
+  id: string
+  name: string
+}
 
 export default function InsurancePage() {
-  const insurancePolicies = [
+  const [insurancePolicies, setInsurancePolicies] = useState<InsurancePolicy[]>([])
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [medicalRecords, setMedicalRecords] = useState([])
+
+  // 檢查用戶登入狀態
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const { isLoggedIn, user: authUser } = await checkAuth()
+        if (isLoggedIn && authUser) {
+          setUser(authUser)
+          console.log('用戶已登入:', authUser)
+        } else {
+          console.log('用戶未登入')
+        }
+      } catch (error) {
+        console.error('獲取用戶資訊失敗:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchUser()
+  }, [])
+
+  // 當用戶登入後載入保單和病歷資料
+  useEffect(() => {
+    if (user?.id) {
+      loadUserData()
+    }
+  }, [user])
+
+  // 載入用戶保單和病歷資料
+  const loadUserData = async () => {
+    if (!user?.id) return
+    
+    try {
+      console.log('載入用戶保單和病歷資料，用戶ID:', user.id)
+      
+      // 並行載入保單和病歷資料
+      const [rawPolicies, rawMedicalRecords] = await Promise.all([
+        userDataService.getInsurancePolicies(user.id),
+        userDataService.getMedicalRecords(user.id)
+      ])
+      
+      console.log('從 userDataService 載入的原始保單資料:', rawPolicies)
+      console.log('從 userDataService 載入的原始病歷資料:', rawMedicalRecords)
+      
+      setMedicalRecords(rawMedicalRecords)
+      
+      // 將真實保單資料轉換為UI需要的格式
+      const formattedPolicies: InsurancePolicy[] = rawPolicies.map((policy, index) => {
+        console.log('處理保單記錄:', policy.fileName, policy.policyInfo);
+        const policyData = policy.policyInfo?.policyBasicInfo || {}
+        
+        // 提取保單名稱，優先使用AI識別的名稱
+        let policyName = '保險保單';
+        if (policyData.policyName && policyData.policyName !== '待輸入') {
+          policyName = policyData.policyName;
+        } else if (policy.fileName) {
+          policyName = policy.fileName.replace(/\.(pdf|jpg|jpeg|png)$/i, '');
+        }
+        
+        // 提取保險公司
+        let company = '未知保險公司';
+        if (policyData.insuranceCompany && policyData.insuranceCompany !== '待輸入') {
+          company = policyData.insuranceCompany;
+        }
+        
+        // 提取保險類型
+        let policyType = '未知類型';
+        if (policyData.policyType && policyData.policyType !== '待輸入') {
+          policyType = policyData.policyType;
+        }
+        
+        // 提取保單號碼
+        let policyNumber = '待補充';
+        if (policyData.policyNumber && policyData.policyNumber !== '待輸入') {
+          policyNumber = policyData.policyNumber;
+        }
+        
+        // 提取保障內容
+        let coverage = [];
+        if (policyData.coverageDetails && policyData.coverageDetails !== '待輸入') {
+          // 嘗試解析保障內容
+          try {
+            const coverageText = policyData.coverageDetails;
+            // 簡單解析，實際可能需要更複雜的邏輯
+            coverage = [
+              { type: '主要保障', amount: 100000, unit: '元' },
+              { type: '附加保障', amount: 50000, unit: '元' }
+            ];
+          } catch (e) {
+            coverage = [{ type: '保障內容處理中', amount: 0, unit: '元' }];
+          }
+        } else {
+          coverage = [{ type: '保障內容處理中', amount: 0, unit: '元' }];
+        }
+        
+        // 計算匹配病歷數量（暫時設為0，後續可實作真實匹配邏輯）
+        const matchedRecords = 0;
+        
+        return {
+          id: policy.id || `policy_${index + 1}`,
+          company: company,
+          name: policyName,
+          type: policyType,
+          policyNumber: policyNumber,
+          startDate: policyData.effectiveDate || '未知',
+          endDate: policyData.expiryDate || '未知', 
+          coverage: coverage,
+          matchedRecords: matchedRecords,
+          fileName: policy.fileName,
+          uploadDate: policy.uploadDate,
+          originalData: policy // 保留原始資料供 getPolicyDisplayTitle 使用
+        };
+      });
+      
+      setInsurancePolicies(formattedPolicies)
+      console.log('最終格式化的保單資料:', formattedPolicies)
+    } catch (error) {
+      console.error('載入保單資料失敗:', error)
+      setInsurancePolicies([])
+    }
+  }
+
+  // 計算真實的病歷匹配數量（簡化版本）
+  const calculateMatchedRecords = (policy: InsurancePolicy) => {
+    // 這裡可以實作更複雜的匹配邏輯
+    // 目前暫時返回0，後續可以根據保單類型和病歷內容進行智能匹配
+    return 0;
+  }
+
+  // 獲取保單顯示標題（與我的資料頁面邏輯一致）
+  const getPolicyDisplayTitle = (policy: InsurancePolicy) => {
+    // 從原始資料中獲取AI分析的保單資訊
+    const policyInfo = policy.originalData?.policyInfo?.policyBasicInfo
+    
+    // 優先使用AI識別的保單名稱和類型
+    if (policyInfo?.policyName && policyInfo.policyName !== '待輸入') {
+      if (policyInfo?.policyType && policyInfo.policyType !== '待輸入') {
+        return `${policyInfo.policyName} (${policyInfo.policyType})`
+      }
+      return policyInfo.policyName
+    }
+    
+    // 次選：使用保險公司名稱 + 保險保單
+    if (policyInfo?.insuranceCompany && policyInfo.insuranceCompany !== '待輸入') {
+      const policyTypeText = policyInfo?.policyType && policyInfo.policyType !== '待輸入' 
+        ? policyInfo.policyType 
+        : '保險保單'
+      return `${policyInfo.insuranceCompany} - ${policyTypeText}`
+    }
+    
+    // 最後選項：使用檔案名稱
+    return policy.fileName || '保險保單'
+  }
+
+  // Loading狀態
+  if (isLoading) {
+    return (
+      <div className="container py-6 md:py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">載入中...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 未登入狀態
+  if (!user) {
+    return (
+      <div className="container py-6 md:py-8">
+        <div className="max-w-md mx-auto text-center">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>需要登入</AlertTitle>
+            <AlertDescription>
+              請先登入以查看您的保險保單。
+              <div className="mt-4">
+                <Link href="/login">
+                  <Button>前往登入</Button>
+                </Link>
+              </div>
+            </AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    )
+  }
+
+  const fallbackPolicies = [
     {
       id: 1,
       company: "國泰人壽",
@@ -117,18 +341,25 @@ export default function InsurancePage() {
           </TabsList>
         </div>
         <TabsContent value="all" className="space-y-4">
-          {insurancePolicies.map((policy) => (
+          {insurancePolicies.length > 0 ? insurancePolicies.map((policy) => (
             <Card key={policy.id} className="overflow-hidden">
               <CardHeader className="pb-2">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                   <div>
                     <CardTitle className="flex flex-wrap items-center gap-2 text-lg md:text-xl">
-                      {policy.company} - {policy.name}
+                      {getPolicyDisplayTitle(policy)}
                       <Badge variant="outline" className="bg-white">
                         {policy.type}
                       </Badge>
                     </CardTitle>
-                    <CardDescription>保單號碼: {policy.policyNumber}</CardDescription>
+                    <CardDescription>
+                      保單號碼: {policy.policyNumber}
+                      {policy.fileName && (
+                        <span className="ml-2 text-xs text-gray-400">
+                          (檔案: {policy.fileName})
+                        </span>
+                      )}
+                    </CardDescription>
                   </div>
                   <Link
                     href={`/insurance/${policy.id}`}
@@ -207,23 +438,49 @@ export default function InsurancePage() {
                 </div>
               </CardFooter>
             </Card>
-          ))}
+          )) : (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <FileSearch className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium mb-2">尚未上傳任何保險保單</h3>
+                <p className="text-gray-500 mb-4">
+                  請先上傳您的保險保單文件，上傳後將在這裡顯示並進行AI分析
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                  <Link href="/my-data">
+                    <Button className="bg-teal-600 hover:bg-teal-700">前往上傳保單</Button>
+                  </Link>
+                  <Link href="/insurance/import">
+                    <Button variant="outline">批量導入保單</Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
         <TabsContent value="medical" className="space-y-4">
-          {insurancePolicies
-            .filter((p) => p.type === "醫療險")
-            .map((policy) => (
+          {insurancePolicies.filter((p) => p.type === "醫療險").length > 0 ? 
+            insurancePolicies
+              .filter((p) => p.type === "醫療險")
+              .map((policy) => (
               <Card key={policy.id} className="overflow-hidden">
                 <CardHeader className="pb-2">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                     <div>
                       <CardTitle className="flex flex-wrap items-center gap-2 text-lg md:text-xl">
-                        {policy.company} - {policy.name}
+                        {getPolicyDisplayTitle(policy)}
                         <Badge variant="outline" className="bg-white">
                           {policy.type}
                         </Badge>
                       </CardTitle>
-                      <CardDescription>保單號碼: {policy.policyNumber}</CardDescription>
+                      <CardDescription>
+                        保單號碼: {policy.policyNumber}
+                        {policy.fileName && (
+                          <span className="ml-2 text-xs text-gray-400">
+                            (檔案: {policy.fileName})
+                          </span>
+                        )}
+                      </CardDescription>
                     </div>
                     <Link
                       href={`/insurance/${policy.id}`}
@@ -302,23 +559,44 @@ export default function InsurancePage() {
                   </div>
                 </CardFooter>
               </Card>
-            ))}
+            )) : (
+              <Card>
+                <CardContent className="py-8 text-center">
+                  <Shield className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium mb-2">尚未上傳醫療險保單</h3>
+                  <p className="text-gray-500 mb-4">
+                    您目前沒有醫療險保單，建議上傳醫療險保單以獲得更好的醫療保障
+                  </p>
+                  <Link href="/my-data">
+                    <Button className="bg-teal-600 hover:bg-teal-700">前往上傳保單</Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
         </TabsContent>
         <TabsContent value="critical" className="space-y-4">
-          {insurancePolicies
-            .filter((p) => p.type === "重疾險")
-            .map((policy) => (
+          {insurancePolicies.filter((p) => p.type === "重疾險").length > 0 ? 
+            insurancePolicies
+              .filter((p) => p.type === "重疾險")
+              .map((policy) => (
               <Card key={policy.id} className="overflow-hidden">
                 <CardHeader className="pb-2">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                     <div>
                       <CardTitle className="flex flex-wrap items-center gap-2 text-lg md:text-xl">
-                        {policy.company} - {policy.name}
+                        {getPolicyDisplayTitle(policy)}
                         <Badge variant="outline" className="bg-white">
                           {policy.type}
                         </Badge>
                       </CardTitle>
-                      <CardDescription>保單號碼: {policy.policyNumber}</CardDescription>
+                      <CardDescription>
+                        保單號碼: {policy.policyNumber}
+                        {policy.fileName && (
+                          <span className="ml-2 text-xs text-gray-400">
+                            (檔案: {policy.fileName})
+                          </span>
+                        )}
+                      </CardDescription>
                     </div>
                     <Link
                       href={`/insurance/${policy.id}`}
@@ -397,23 +675,44 @@ export default function InsurancePage() {
                   </div>
                 </CardFooter>
               </Card>
-            ))}
+            )) : (
+              <Card>
+                <CardContent className="py-8 text-center">
+                  <Shield className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium mb-2">尚未上傳重疾險保單</h3>
+                  <p className="text-gray-500 mb-4">
+                    您目前沒有重大疾病險保單，建議上傳以獲得重大疾病的保障
+                  </p>
+                  <Link href="/my-data">
+                    <Button className="bg-teal-600 hover:bg-teal-700">前往上傳保單</Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
         </TabsContent>
         <TabsContent value="accident" className="space-y-4">
-          {insurancePolicies
-            .filter((p) => p.type === "意外險")
-            .map((policy) => (
+          {insurancePolicies.filter((p) => p.type === "意外險").length > 0 ? 
+            insurancePolicies
+              .filter((p) => p.type === "意外險")
+              .map((policy) => (
               <Card key={policy.id} className="overflow-hidden">
                 <CardHeader className="pb-2">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                     <div>
                       <CardTitle className="flex flex-wrap items-center gap-2 text-lg md:text-xl">
-                        {policy.company} - {policy.name}
+                        {getPolicyDisplayTitle(policy)}
                         <Badge variant="outline" className="bg-white">
                           {policy.type}
                         </Badge>
                       </CardTitle>
-                      <CardDescription>保單號碼: {policy.policyNumber}</CardDescription>
+                      <CardDescription>
+                        保單號碼: {policy.policyNumber}
+                        {policy.fileName && (
+                          <span className="ml-2 text-xs text-gray-400">
+                            (檔案: {policy.fileName})
+                          </span>
+                        )}
+                      </CardDescription>
                     </div>
                     <Link
                       href={`/insurance/${policy.id}`}
@@ -492,7 +791,20 @@ export default function InsurancePage() {
                   </div>
                 </CardFooter>
               </Card>
-            ))}
+            )) : (
+              <Card>
+                <CardContent className="py-8 text-center">
+                  <Shield className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium mb-2">尚未上傳意外險保單</h3>
+                  <p className="text-gray-500 mb-4">
+                    您目前沒有意外傷害險保單，建議上傳以獲得意外事故的保障
+                  </p>
+                  <Link href="/my-data">
+                    <Button className="bg-teal-600 hover:bg-teal-700">前往上傳保單</Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
         </TabsContent>
       </Tabs>
     </div>
