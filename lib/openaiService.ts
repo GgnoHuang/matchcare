@@ -229,7 +229,7 @@ ${imageBase64 ? `## 🖼️ 圖片內容分析
 請確保分析基於實際的醫療資訊，而非僅根據患者提供的基本資料。`;
 
     const response = await this.callAPI(prompt, imageBase64 ? 'gpt-4o' : 'gpt-4o-mini', imageBase64);
-    return this.parseJSONResponse(response.content);
+    return this.parseMedicalAnalysisResponse(response.content);
   }
 
   /**
@@ -404,6 +404,45 @@ ${policyImageBase64 ? '請仔細分析保單圖片中的所有條款內容，包
   }
 
   /**
+   * 解析醫療分析回應
+   */
+  private parseMedicalAnalysisResponse(content: string): MedicalAnalysisResult {
+    try {
+      // 提取 JSON 部分
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        console.log('✅ 醫療分析 JSON 解析成功:', parsed);
+        
+        // 確保所有必要欄位存在，提供預設值
+        return {
+          disease: parsed.disease || '無法識別疾病',
+          severity: parsed.severity || '無法判定嚴重程度',
+          treatmentStage: parsed.treatmentStage || '無法判定治療階段',
+          estimatedCost: parsed.estimatedCost || '無法估算費用',
+          careNeeds: parsed.careNeeds || '無法分析照護需求',
+          familyImpact: parsed.familyImpact || '無法分析家庭影響'
+        };
+      }
+      console.error('❌ 醫療分析無法找到有效的 JSON 回應，原始內容:', content);
+      throw new Error('無法找到有效的 JSON 回應');
+    } catch (error) {
+      console.error('❌ 醫療分析 JSON 解析失敗:', error);
+      console.error('原始回應內容:', content);
+      
+      // 返回預設醫療分析結果
+      return {
+        disease: 'AI分析失敗，請檢查上傳的醫療文件是否清晰',
+        severity: '無法自動判定，建議諮詢醫師',
+        treatmentStage: '無法自動分析，建議與醫療團隊討論',
+        estimatedCost: '無法自動估算，請向醫療機構詢問',
+        careNeeds: '無法自動分析，建議諮詢護理師或社工師',
+        familyImpact: '無法自動評估，建議家庭討論與規劃'
+      };
+    }
+  }
+
+  /**
    * 解析 JSON 回應
    */
   private parseJSONResponse(content: string): any {
@@ -411,11 +450,17 @@ ${policyImageBase64 ? '請仔細分析保單圖片中的所有條款內容，包
       // 提取 JSON 部分
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const parsed = JSON.parse(jsonMatch[0]);
+        console.log('✅ JSON 解析成功:', parsed);
+        return parsed;
       }
+      console.error('❌ 無法找到有效的 JSON 回應，原始內容:', content);
       throw new Error('無法找到有效的 JSON 回應');
     } catch (error) {
-      console.error('JSON 解析失敗:', error);
+      console.error('❌ JSON 解析失敗:', error);
+      console.error('原始回應內容:', content);
+      
+      // 返回空對象，讓調用方處理
       return {};
     }
   }

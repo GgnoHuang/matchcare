@@ -42,6 +42,7 @@ import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
 import FileSelector, { SelectedFileData } from "@/components/ui/file-selector"
 import { OpenAIService, CaseData, ResourceItem, MedicalAnalysisResult } from "@/lib/openaiService"
 import { checkAuth } from "@/app/actions/auth-service"
+import { userDataService } from "@/lib/storage"
 
 export default function AIResourcesPage() {
   // 主要功能切換狀態
@@ -55,14 +56,14 @@ export default function AIResourcesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
 
-  // 新增：AI 分析相關狀態
-  const [apiKey, setApiKey] = useState("")
+  // AI 分析相關狀態
+  const [apiKey, setApiKey] = useState("") // 將從帳號設定讀取
   const [selectedMedicalFile, setSelectedMedicalFile] = useState<SelectedFileData | null>(null)
   const [selectedPolicyFile, setSelectedPolicyFile] = useState<SelectedFileData | null>(null)
   const [selectedDiagnosisFile, setSelectedDiagnosisFile] = useState<SelectedFileData | null>(null)
   const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null)
   const [aiGeneratedResources, setAiGeneratedResources] = useState<ResourceItem[]>([])
-  const [analysisMode, setAnalysisMode] = useState<'demo' | 'real'>('demo')
+  // 已移除analysisMode - 只使用真實模式
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<{ id: string, name: string } | null>(null)
 
@@ -71,13 +72,18 @@ export default function AIResourcesPage() {
   const [quickSearchResults, setQuickSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
 
-  // 檢查用戶登入狀態
+  // 檢查用戶登入狀態並載入API Key
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const { isLoggedIn, user } = await checkAuth()
         if (isLoggedIn && user) {
           setUser(user)
+          // 從 localStorage 讀取 OpenAI API Key
+          const storedApiKey = localStorage.getItem('openai_api_key')
+          if (storedApiKey) {
+            setApiKey(storedApiKey)
+          }
         }
       } catch (error) {
         console.error('獲取用戶資訊失敗:', error)
@@ -86,50 +92,37 @@ export default function AIResourcesPage() {
     fetchUser()
   }, [])
 
-  // 模擬分析過程
-  useEffect(() => {
-    if (isAnalyzing) {
-      const interval = setInterval(() => {
-        setAnalysisProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval)
-            setIsAnalyzing(false)
-            setAnalysisComplete(true)
-            return 100
-          }
-          return prev + 5
-        })
-      }, 150)
-      return () => clearInterval(interval)
-    }
-  }, [isAnalyzing])
+  // 已移除模擬分析進度 - 改用真實AI分析進度
 
   // 開始分析
   const startAnalysis = async () => {
-    setError(null)
-    setIsAnalyzing(true)
-    setAnalysisProgress(0)
-    setAnalysisComplete(false)
-    setAiAnalysisResult(null)
+    try {
+      setError(null)
+      setIsAnalyzing(true)
+      setAnalysisProgress(0)
+      setAnalysisComplete(false)
+      setAiAnalysisResult(null)
 
-    if (analysisMode === 'real') {
-      // 真實 AI 分析模式
+      // 只使用真實 AI 分析模式
       await performRealAIAnalysis()
-    } else {
-      // 演示模式（原有邏輯）
-      await performDemoAnalysis()
+    } catch (error) {
+      console.error('分析啟動失敗:', error)
+      setError('分析啟動失敗，請稍後再試')
+      setIsAnalyzing(false)
     }
   }
 
   // 真實 AI 分析
   const performRealAIAnalysis = async () => {
     console.log("開始真實 AI 分析...")
-    console.log("API Key 存在:", !!apiKey.trim())
+    
+    // 檢查API Key（從帳號設定中讀取）
+    const storedApiKey = localStorage.getItem('openai_api_key')
+    console.log("API Key 存在:", !!storedApiKey)
     console.log("選擇的病歷檔案:", selectedMedicalFile)
     console.log("選擇的保單檔案:", selectedPolicyFile)
-
-    if (!apiKey.trim()) {
-      setError("請先輸入 OpenAI API Key")
+    if (!storedApiKey) {
+      setError("請先到帳號設定頁面設定 OpenAI API Key")
       setIsAnalyzing(false)
       return
     }
@@ -149,11 +142,58 @@ export default function AIResourcesPage() {
     }
 
     try {
-      const openaiService = new OpenAIService(apiKey)
+      const openaiService = new OpenAIService(storedApiKey)
       let medicalText = ''
       let policyText = ''
 
-      // 提取病例文字
+      // 首先讀取已保存的醫療資料
+      const [savedMedicalRecords, savedDiagnosisCertificates] = await Promise.all([
+        userDataService.getMedicalRecords(user?.id || ''),
+        userDataService.getDiagnosisCertificates(user?.id || '')
+      ])
+
+      console.log('📊 讀取已保存的醫療資料:')
+      console.log(`- 病歷記錄: ${savedMedicalRecords.length} 筆`)
+      console.log(`- 診斷證明: ${savedDiagnosisCertificates.length} 筆`)
+
+      // 整合已保存的醫療資料
+      let combinedMedicalData = ''
+      
+      if (savedMedicalRecords.length > 0) {
+        combinedMedicalData += '=== 已保存的病歷記錄 ===\n'
+        savedMedicalRecords.forEach((record, index) => {
+          if (record.analysisResult) {
+            combinedMedicalData += `病歷 ${index + 1}:\n`
+            combinedMedicalData += `- 病症: ${record.analysisResult.primaryCondition || '未知'}\n`
+            combinedMedicalData += `- 診斷: ${record.analysisResult.diagnosis || '未知'}\n`
+            combinedMedicalData += `- 就醫日期: ${record.analysisResult.visitDate || '未知'}\n`
+            combinedMedicalData += `- 醫院: ${record.analysisResult.hospital || '未知'}\n`
+            if (record.analysisResult.medications) {
+              combinedMedicalData += `- 用藥: ${record.analysisResult.medications}\n`
+            }
+            combinedMedicalData += '\n'
+          }
+        })
+      }
+
+      if (savedDiagnosisCertificates.length > 0) {
+        combinedMedicalData += '=== 已保存的診斷證明 ===\n'
+        savedDiagnosisCertificates.forEach((cert, index) => {
+          if (cert.analysisResult) {
+            combinedMedicalData += `診斷證明 ${index + 1}:\n`
+            combinedMedicalData += `- 主診斷: ${cert.analysisResult.primaryDiagnosis || '未知'}\n`
+            combinedMedicalData += `- 診斷日期: ${cert.analysisResult.diagnosisDate || '未知'}\n`
+            combinedMedicalData += `- 醫師: ${cert.analysisResult.doctorName || '未知'}\n`
+            combinedMedicalData += `- 醫院: ${cert.analysisResult.hospitalName || '未知'}\n`
+            if (cert.analysisResult.treatmentPlan) {
+              combinedMedicalData += `- 治療計劃: ${cert.analysisResult.treatmentPlan}\n`
+            }
+            combinedMedicalData += '\n'
+          }
+        })
+      }
+
+      // 提取新上傳文件的病例文字
       if (selectedMedicalFile) {
         if (selectedMedicalFile.fileType === 'pdf' && selectedMedicalFile.textContent) {
           medicalText = selectedMedicalFile.textContent
@@ -194,26 +234,28 @@ export default function AIResourcesPage() {
       setAnalysisProgress(20)
       const medicalImageBase64 = (selectedMedicalFile && selectedMedicalFile.fileType === 'image') ? selectedMedicalFile.imageBase64 : null
       
-      // 合併醫療文字內容（病歷和診斷證明）
-      let combinedMedicalText = ''
+      // 合併所有醫療文字內容（已保存資料 + 新上傳文件）
+      let finalMedicalText = combinedMedicalData
+
+      // 添加新上傳的病歷文件
       if (medicalText) {
-        combinedMedicalText = medicalText
+        finalMedicalText += '\n=== 新上傳的病歷文件 ===\n' + medicalText
       }
+
+      // 添加新上傳的診斷證明
       if (diagnosisText) {
-        if (combinedMedicalText) {
-          combinedMedicalText += '\n\n=== 診斷證明資料 ===\n' + diagnosisText
-        } else {
-          combinedMedicalText = '=== 診斷證明資料 ===\n' + diagnosisText
-        }
+        finalMedicalText += '\n=== 新上傳的診斷證明 ===\n' + diagnosisText
       }
       
-      // 如果兩者都沒有文字內容，提供基本提示
-      if (!combinedMedicalText.trim()) {
-        combinedMedicalText = "請根據上傳的醫療文件圖片進行分析"
+      // 如果完全沒有醫療資料，提供基本提示
+      if (!finalMedicalText.trim()) {
+        finalMedicalText = "請根據上傳的醫療文件圖片進行分析"
       }
+
+      console.log('🔄 整合的醫療資料長度:', finalMedicalText.length)
       
-      // 等待 OpenAI 分析病例
-      const medicalAnalysis = await openaiService.analyzeMedicalCase(combinedMedicalText, caseData, medicalImageBase64)
+      // 等待 OpenAI 分析病例（使用整合的醫療資料）
+      const medicalAnalysis = await openaiService.analyzeMedicalCase(finalMedicalText, caseData, medicalImageBase64)
       console.log("病例分析結果:", medicalAnalysis)
 
       console.log("第2步：搜尋政府補助資源...")
@@ -230,7 +272,7 @@ export default function AIResourcesPage() {
 
       console.log("第4步：分析保單理賠資源...")
       setAnalysisProgress(80)
-      const policyImageBase64 = selectedPolicyFile.fileType === 'image' ? selectedPolicyFile.imageBase64 : null
+      const policyImageBase64 = (selectedPolicyFile && selectedPolicyFile.fileType === 'image') ? selectedPolicyFile.imageBase64 : null
       // 等待 OpenAI 分析保單理賠
       const insResources = await openaiService.analyzeInsuranceClaims(medicalAnalysis, policyText, policyImageBase64)
       console.log("保單理賠資源:", insResources)
@@ -241,7 +283,14 @@ export default function AIResourcesPage() {
       setAiGeneratedResources(allResources)
 
       // 生成分析報告
-      const analysisReport = `## 🔍 AI 分析報告
+      const analysisReport = `## 🔍 AI 綜合分析報告
+
+### 資料來源整合
+- **已保存病歷記錄**: ${savedMedicalRecords.length} 筆
+- **已保存診斷證明**: ${savedDiagnosisCertificates.length} 筆
+- **新上傳病歷文件**: ${medicalText ? '1 筆' : '0 筆'}
+- **新上傳診斷證明**: ${diagnosisText ? '1 筆' : '0 筆'}
+- **總醫療資料量**: ${finalMedicalText.length} 字元
 
 ### 病例分析結果
 - **主要疾病**: ${medicalAnalysis.disease}
@@ -255,7 +304,6 @@ export default function AIResourcesPage() {
 - **政府補助資源**: ${govResources.length} 項
 - **企業福利資源**: ${corpResources.length} 項
 - **保單理賠資源**: ${insResources.length} 項
-- **診斷證明**: 已提供，用於輔助分析
 - **總計可用資源**: ${allResources.length} 項
 
 ### 建議優先級
@@ -280,18 +328,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
     }
   }
 
-  // 演示分析（原有邏輯）
-  const performDemoAnalysis = async () => {
-    const steps = [20, 40, 60, 80, 100]
-    for (const step of steps) {
-      await new Promise(resolve => setTimeout(resolve, 800))
-      setAnalysisProgress(step)
-    }
-    setTimeout(() => {
-      setAnalysisComplete(true)
-      setIsAnalyzing(false)
-    }, 500)
-  }
+  // 已移除演示模式
 
   // 重置分析
   const resetAnalysis = () => {
@@ -593,18 +630,12 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
     },
   ]
 
-  // 獲取要顯示的資源（AI 生成資源或演示資源）
+  // 只顯示真實AI生成的資源
   const getCurrentResources = () => {
-    if (analysisMode === 'real') {
-      // 真實模式只有在分析完成且有 AI 資源時才顯示
-      if (analysisComplete && aiGeneratedResources.length > 0) {
-        return aiGeneratedResources
-      }
-      // 真實模式分析中或無結果時返回空陣列
-      return []
+    if (analysisComplete && aiGeneratedResources.length > 0) {
+      return aiGeneratedResources
     }
-    // 演示模式返回假資料
-    return resources
+    return []
   }
 
   // 過濾資源
@@ -688,78 +719,26 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
           {/* 模式選擇和設定區域 */}
           {!isAnalyzing && !analysisComplete && (
             <div className="space-y-6 mb-8">
-              {/* 分析模式選擇 */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Brain className="h-5 w-5" />
-                    AI 分析模式選擇
-                  </CardTitle>
-                  <CardDescription>
-                    選擇使用演示資料或上傳真實醫療文件進行分析
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card 
-                      className={`cursor-pointer border-2 transition-colors ${analysisMode === 'demo' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
-                      onClick={() => setAnalysisMode('demo')}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-4 h-4 rounded-full border-2 border-blue-500 flex items-center justify-center">
-                            {analysisMode === 'demo' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
-                          </div>
-                          <div>
-                            <h3 className="font-medium">演示模式</h3>
-                            <p className="text-sm text-gray-500">使用預設的病例資料進行演示分析（舊有資料）</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card 
-                      className={`cursor-pointer border-2 transition-colors ${analysisMode === 'real' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
-                      onClick={() => setAnalysisMode('real')}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-4 h-4 rounded-full border-2 border-blue-500 flex items-center justify-center">
-                            {analysisMode === 'real' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
-                          </div>
-                          <div>
-                            <h3 className="font-medium">真實分析模式</h3>
-                            <p className="text-sm text-gray-500">上傳您的病例文件，使用 AI 進行真實分析</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* 真實分析模式的設定 */}
-              {analysisMode === 'real' && (
+              {/* AI 真實分析設定 */}
                 <div className="space-y-4">
-                  {/* OpenAI API Key 輸入 */}
+                  {/* API Key 狀態提示 */}
                   <Card>
                     <CardContent className="p-4">
-                      <div className="space-y-3">
-                        <Label htmlFor="apiKey" className="flex items-center gap-2">
-                          <Key className="h-4 w-4" />
-                          OpenAI API Key
-                        </Label>
-                        <Input
-                          id="apiKey"
-                          type="password"
-                          value={apiKey}
-                          onChange={(e) => setApiKey(e.target.value)}
-                          placeholder="請輸入您的 OpenAI API Key"
-                          className="w-full"
-                        />
-                        <p className="text-xs text-gray-500">
-                          💡 您的 API Key 只會在本次瀏覽器會話中使用，不會被儲存
-                        </p>
+                      <div className="flex items-center gap-3">
+                        <Key className="h-5 w-5 text-blue-600" />
+                        <div>
+                          <h3 className="font-medium">OpenAI API Key</h3>
+                          {apiKey ? (
+                            <p className="text-sm text-green-600">✓ 已設定API Key</p>
+                          ) : (
+                            <p className="text-sm text-red-600">
+                              ⚠️ 尚未設定API Key - 
+                              <Link href="/settings" className="text-blue-600 hover:underline ml-1">
+                                前往設定頁面
+                              </Link>
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -810,11 +789,10 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                 <Button 
                   onClick={startAnalysis} 
                   className="gap-2 bg-blue-600 hover:bg-blue-700"
-                  disabled={analysisMode === 'real' && (!apiKey.trim() || !selectedPolicyFile || (!selectedMedicalFile && !selectedDiagnosisFile))}
+                  disabled={!selectedPolicyFile || (!selectedMedicalFile && !selectedDiagnosisFile)}
                 >
                   <Brain className="h-4 w-4" />
                   開始AI資源分析
-                  {analysisMode === 'demo' && <span className="text-xs">(演示)</span>}
                 </Button>
               </div>
             </div>
@@ -845,7 +823,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-center text-sm">
                     <div className={`${analysisProgress >= 20 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
                       <div className="flex flex-col items-center">
-                        <span>{analysisMode === 'real' ? 'AI分析病歷' : '分析病歷資料'}</span>
+                        <span>AI分析病歷</span>
                         {analysisProgress > 0 && analysisProgress < 40 && (
                           <div className="flex items-center mt-1">
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
@@ -856,7 +834,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                     </div>
                     <div className={`${analysisProgress >= 40 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
                       <div className="flex flex-col items-center">
-                        <span>{analysisMode === 'real' ? 'AI搜尋政府補助' : '匹配政府補助'}</span>
+                        <span>AI搜尋政府補助</span>
                         {analysisProgress >= 40 && analysisProgress < 60 && (
                           <div className="flex items-center mt-1">
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
@@ -867,7 +845,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                     </div>
                     <div className={`${analysisProgress >= 60 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
                       <div className="flex flex-col items-center">
-                        <span>{analysisMode === 'real' ? 'AI搜尋企業福利' : '匹配企業福利'}</span>
+                        <span>AI搜尋企業福利</span>
                         {analysisProgress >= 60 && analysisProgress < 80 && (
                           <div className="flex items-center mt-1">
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
@@ -878,7 +856,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                     </div>
                     <div className={`${analysisProgress >= 80 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
                       <div className="flex flex-col items-center">
-                        <span>{analysisMode === 'real' ? 'AI分析保單' : '匹配保單理賠'}</span>
+                        <span>AI分析保單</span>
                         {analysisProgress >= 80 && analysisProgress < 100 && (
                           <div className="flex items-center mt-1">
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
@@ -889,7 +867,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                     </div>
                     <div className={`${analysisProgress >= 100 ? "text-blue-600 font-medium" : "text-gray-400"}`}>
                       <div className="flex flex-col items-center">
-                        <span>{analysisMode === 'real' ? '整合AI結果' : '生成資源報告'}</span>
+                        <span>整合AI結果</span>
                         {analysisProgress >= 100 && (
                           <div className="flex items-center mt-1">
                             <div className="w-3 h-3 bg-green-600 rounded-full"></div>
@@ -910,15 +888,12 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                 <Brain className="h-4 w-4 text-blue-600" />
                 <AlertTitle className="text-blue-600">AI分析完成</AlertTitle>
                 <AlertDescription>
-                  {analysisMode === 'real' 
-                    ? `AI 已根據您上傳的醫療文件完成分析，以下是匹配的資源建議。`
-                    : `根據您的12筆病歷記錄，我們找到了20項可能符合條件的資源，包括政府補助、企業福利、保單理賠等。請查看下方詳細資訊。（演示資料）`
-                  }
+                  `AI 已根據您上傳的醫療文件完成分析，以下是匹配的資源建議。`
                 </AlertDescription>
               </Alert>
 
-              {/* 真實 AI 分析結果 */}
-              {analysisMode === 'real' && aiAnalysisResult && (
+              {/* AI 分析結果 */}
+              {aiAnalysisResult && (
                 <Card className="mb-6">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -1055,7 +1030,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-xl font-bold">政府補助資源</h2>
                     <Badge className="bg-blue-600">{resourceStats.government}項</Badge>
-                    {analysisMode === 'real' && aiGeneratedResources.length > 0 && (
+                    {aiGeneratedResources.length > 0 && (
                       <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
                         AI搜尋結果
                       </Badge>
@@ -1072,7 +1047,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-xl font-bold">企業福利資源</h2>
                     <Badge className="bg-green-600">{resourceStats.corporate}項</Badge>
-                    {analysisMode === 'real' && aiGeneratedResources.length > 0 && (
+                    {aiGeneratedResources.length > 0 && (
                       <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
                         AI搜尋結果
                       </Badge>
@@ -1089,7 +1064,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-xl font-bold">保單理賠資源</h2>
                     <Badge className="bg-teal-600">{resourceStats.insurance}項</Badge>
-                    {analysisMode === 'real' && aiGeneratedResources.length > 0 && (
+                    {aiGeneratedResources.length > 0 && (
                       <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
                         AI分析結果
                       </Badge>
@@ -1106,7 +1081,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-xl font-bold">金融產品保障</h2>
                     <Badge className="bg-purple-600">{resourceStats.financial}項</Badge>
-                    {analysisMode === 'real' && aiGeneratedResources.length > 0 && (
+                    {aiGeneratedResources.length > 0 && (
                       <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
                         AI搜尋結果
                       </Badge>
@@ -1123,7 +1098,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-xl font-bold">法律救助資源</h2>
                     <Badge className="bg-red-600">{resourceStats.legal}項</Badge>
-                    {analysisMode === 'real' && aiGeneratedResources.length > 0 && (
+                    {aiGeneratedResources.length > 0 && (
                       <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
                         AI搜尋結果
                       </Badge>
@@ -1139,7 +1114,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
               )}
 
               {/* 真實模式且無資源時的提示 */}
-              {analysisMode === 'real' && analysisComplete && aiGeneratedResources.length === 0 && (
+              {analysisComplete && aiGeneratedResources.length === 0 && (
                 <Card className="mb-6">
                   <CardContent className="pt-6">
                     <div className="text-center py-8">
@@ -1294,7 +1269,12 @@ function QuickSearchContent({
       }
 
       // 使用OpenAI服務進行綜合搜尋
-      const openaiService = new (await import('../../lib/openaiService')).OpenAIService(apiKey)
+      // 使用帳號設定中的API Key
+      const storedApiKey = localStorage.getItem('openai_api_key')
+      if (!storedApiKey) {
+        throw new Error('請先到帳號設定頁面設定 OpenAI API Key')
+      }
+      const openaiService = new (await import('../../lib/openaiService')).OpenAIService(storedApiKey)
       const result = await openaiService.comprehensiveSearch(searchTerm, userPolicies)
       
       console.log('綜合搜尋結果:', result)
