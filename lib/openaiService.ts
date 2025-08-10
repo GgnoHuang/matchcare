@@ -1288,6 +1288,43 @@ ${policyText}
   }
 
   /**
+   * 保單評分分析（專用於保險詳情頁面）
+   */
+  async analyzePolicyEvaluation(prompt: string): Promise<string> {
+    try {
+      console.log('🎯 開始保單評分分析...')
+      
+      const response = await fetch(this.baseURL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 2000,
+          temperature: 0.3
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenAI API 錯誤: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      
+      console.log('✅ 保單評分分析完成，回應長度:', content.length);
+      return content;
+    } catch (error) {
+      console.error('❌ 保單評分分析失敗:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 解析 AI 回應
    */
   private parseResponse(data: any): AnalysisResult {
