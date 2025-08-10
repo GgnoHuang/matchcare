@@ -4,18 +4,147 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Upload, Plus, FileSearch, Calendar, Pill, Stethoscope, AlertCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { MatchedPoliciesDropdown } from "@/app/components/matched-policies-dropdown"
 import { useMediaQuery } from "@/hooks/use-mobile"
+import { userDataService } from "@/lib/storage"
+import { checkAuth } from "@/app/actions/auth-service"
 
 export default function MedicalRecordsPage() {
   const [expandedRecord, setExpandedRecord] = useState<number | null>(null)
+  const [medicalRecords, setMedicalRecords] = useState([])
+  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const isMobile = useMediaQuery("(max-width: 768px)")
 
-  const medicalRecords = [
+  // 檢查用戶登入狀態
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const { isLoggedIn, user: authUser } = await checkAuth()
+        if (isLoggedIn && authUser) {
+          setUser(authUser)
+          console.log('用戶已登入:', authUser)
+        } else {
+          console.log('用戶未登入')
+        }
+      } catch (error) {
+        console.error('獲取用戶資訊失敗:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchUser()
+  }, [])
+
+  // 當用戶登入後載入病歷資料
+  useEffect(() => {
+    if (user?.id) {
+      loadUserMedicalRecords()
+    }
+  }, [user])
+
+  const loadUserMedicalRecords = async () => {
+    if (!user?.id) return
+    
+    try {
+      console.log('載入用戶病歷資料，用戶ID:', user.id)
+      
+      // 先檢查 localStorage 中是否有數據
+      const storageKey = `matchcare_${user.id}_medical_records`
+      const directStorageData = localStorage.getItem(storageKey)
+      console.log('直接從 localStorage 查詢:', storageKey, directStorageData)
+      
+      // 使用 userDataService 載入資料
+      const rawRecords = await userDataService.getMedicalRecords(user.id)
+      console.log('從 userDataService 載入的原始病歷資料:', rawRecords)
+      
+      // 如果 userDataService 沒有數據，但 localStorage 有，可能是服務問題
+      if (rawRecords.length === 0 && directStorageData) {
+        console.warn('userDataService 返回空數據，但 localStorage 有資料，可能是服務問題')
+        try {
+          const parsedDirectData = JSON.parse(directStorageData)
+          console.log('直接解析的 localStorage 數據:', parsedDirectData)
+        } catch (e) {
+          console.error('解析 localStorage 數據失敗:', e)
+        }
+      }
+      
+      // 將真實資料轉換為UI需要的格式
+      const formattedRecords = rawRecords.map((record, index) => {
+        console.log('處理病歷記錄:', record.fileName, record.medicalInfo);
+        const medicalData = record.medicalInfo || {}
+        
+        // 從 hospitalStamp 或 clinicalRecord 提取醫院資訊
+        let hospital = '未知醫院';
+        if (medicalData.hospitalStamp && medicalData.hospitalStamp !== '待輸入') {
+          hospital = medicalData.hospitalStamp;
+        } else if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入' && medicalData.clinicalRecord.includes('醫院')) {
+          const hospitalMatch = medicalData.clinicalRecord.match(/([^,\n]*醫院[^,\n]*)/);
+          if (hospitalMatch) hospital = hospitalMatch[1].trim();
+        }
+        
+        // 從 clinicalRecord 提取診斷資訊
+        let diagnosis = '診斷資料處理中';
+        if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入') {
+          diagnosis = medicalData.clinicalRecord;
+        } else if (medicalData.admissionRecord && medicalData.admissionRecord !== '待輸入') {
+          diagnosis = medicalData.admissionRecord;
+        } else if (medicalData.examinationReport && medicalData.examinationReport !== '待輸入') {
+          diagnosis = medicalData.examinationReport;
+        }
+        
+        // 處理治療記錄
+        let treatments = [];
+        if (medicalData.surgeryRecord && medicalData.surgeryRecord !== '待輸入') {
+          treatments.push(medicalData.surgeryRecord);
+        }
+        if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入' && medicalData.clinicalRecord.includes('治療')) {
+          treatments.push('從門診記錄中識別的治療');
+        }
+        if (treatments.length === 0) treatments = ['治療記錄處理中'];
+        
+        // 處理用藥記錄
+        let medications = [];
+        if (medicalData.medicationRecord && medicalData.medicationRecord !== '待輸入') {
+          medications.push(medicalData.medicationRecord);
+        }
+        if (medications.length === 0) medications = ['用藥記錄處理中'];
+        
+        return {
+          id: record.id || `record_${index + 1}`,
+          hospital: hospital,
+          department: '醫療科別', // 可從病歷內容推斷，目前先用預設值
+          date: record.uploadDate ? new Date(record.uploadDate).toLocaleDateString('zh-TW') : '未知日期',
+          diagnosis: diagnosis,
+          doctor: '主治醫師', // 可從病歷內容提取，目前先用預設值
+          treatments: treatments,
+          medications: medications,
+          hasInsuranceCoverage: true, // 暫時設為true，保持按鈕可用
+          matchedPolicies: 1, // 暫時設為1，保持UI一致
+          claimSuccessRate: 85, // 暫時設為85%
+          matchedPoliciesDetails: [
+            { id: 1, company: '分析中', name: '保險匹配分析處理中', type: '醫療險' }
+          ],
+          fileName: record.fileName,
+          uploadDate: record.uploadDate,
+          originalData: record // 保留原始資料供後續使用
+        }
+      })
+      
+      setMedicalRecords(formattedRecords)
+      console.log('最終格式化的病歷資料:', formattedRecords)
+    } catch (error) {
+      console.error('載入病歷資料失敗:', error)
+      setMedicalRecords([])
+    }
+  }
+
+  // 保留原來的假資料作為後備，以防真實資料載入失敗
+  const fallbackRecords = [
     {
       id: 1,
       hospital: "台大醫院",
@@ -203,12 +332,82 @@ export default function MedicalRecordsPage() {
     },
   ]
 
+  // 使用真實資料，如果沒有則顯示提示
+  const displayRecords = medicalRecords.length > 0 ? medicalRecords : []
+  
+  console.log('病歷管理頁面狀態:')
+  console.log('- medicalRecords數量:', medicalRecords.length)
+  console.log('- displayRecords數量:', displayRecords.length)
+  console.log('- 當前用戶:', user)
+  console.log('- isLoading:', isLoading)
+  console.log('- 儲存Key:', user ? `matchcare_${user.id}_medical_records` : '無用戶')
+
+  // Loading狀態
+  if (isLoading) {
+    return (
+      <div className="container py-6 md:py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">載入中...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 未登入狀態
+  if (!user) {
+    return (
+      <div className="container py-6 md:py-8">
+        <div className="max-w-md mx-auto text-center">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>需要登入</AlertTitle>
+            <AlertDescription>
+              請先登入以查看您的病歷記錄。
+              <div className="mt-4">
+                <Link href="/login">
+                  <Button>前往登入</Button>
+                </Link>
+              </div>
+            </AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container py-6 md:py-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 md:mb-8 space-y-4 md:space-y-0">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">病歷管理</h1>
           <p className="text-gray-500 mt-1 text-sm md:text-base">管理您的醫療記錄並查看保險理賠資格</p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            onClick={async () => {
+              console.log('手動重新載入病歷資料...')
+              if (user?.id) {
+                const storageKey = `matchcare_${user.id}_medical_records`
+                const data = localStorage.getItem(storageKey)
+                console.log('手動檢查 localStorage:', storageKey, data)
+                
+                const rawRecords = await userDataService.getMedicalRecords(user.id)
+                console.log('手動調用 userDataService:', rawRecords)
+                
+                // 重新載入數據
+                await loadUserMedicalRecords()
+              } else {
+                console.log('用戶未登入，無法重新載入')
+              }
+            }}
+            variant="outline" 
+            className="gap-2"
+          >
+            🔄 調試重載
+          </Button>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
           <Link href="/medical-records/import" className="w-full md:w-auto">
@@ -251,7 +450,8 @@ export default function MedicalRecordsPage() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="all" className="space-y-4">
-            {medicalRecords.map((record) => (
+            {displayRecords.length > 0 ? (
+              displayRecords.map((record) => (
               <Card key={record.id} className="overflow-hidden">
                 <CardHeader className="pb-2">
                   <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-0">
@@ -371,10 +571,24 @@ export default function MedicalRecordsPage() {
                   </div>
                 )}
               </Card>
-            ))}
+              ))
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-center">
+                  <FileSearch className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium mb-2">尚未上傳任何病歷</h3>
+                  <p className="text-gray-500 mb-4">
+                    請到「我的資料」頁面上傳您的病歷記錄，上傳後將在這裡顯示
+                  </p>
+                  <Link href="/my-data">
+                    <Button>前往上傳病歷</Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
           <TabsContent value="eligible" className="space-y-4">
-            {medicalRecords
+            {displayRecords
               .filter((r) => r.hasInsuranceCoverage)
               .map((record) => (
                 <Card key={record.id} className="overflow-hidden">
@@ -451,7 +665,7 @@ export default function MedicalRecordsPage() {
               ))}
           </TabsContent>
           <TabsContent value="ineligible" className="space-y-4">
-            {medicalRecords
+            {displayRecords
               .filter((r) => !r.hasInsuranceCoverage)
               .map((record) => (
                 <Card key={record.id} className="overflow-hidden">

@@ -10,7 +10,8 @@
       "Bash(npm run dev:*)",
       "Bash(npm install)",
       "Bash(npm install:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(open:*)"
     ],
     "deny": []
   }
