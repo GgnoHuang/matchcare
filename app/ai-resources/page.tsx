@@ -1225,228 +1225,95 @@ function QuickSearchContent({
 }) {
   // 使用useRef來跟踪當前的搜尋詞，避免閉包問題
   const currentSearchTermRef = useRef(quickSearchTerm)
+  const [searchResult, setSearchResult] = useState(null)
 
   // 當搜尋詞變化時更新ref
   useEffect(() => {
     currentSearchTermRef.current = quickSearchTerm
   }, [quickSearchTerm])
 
-  // 模擬搜尋結果
-  const nonCoveredTreatments = [
-    {
-      id: "treatment-1",
-      name: "達文西機器人手術",
-      description: "使用達文西手術系統進行的微創手術，提供更精確的手術操作和更快的恢復時間。",
-      averageCost: "150,000 - 350,000元",
-      category: "手術",
-      icon: <Stethoscope className="h-5 w-5 text-blue-600" />,
-      matchedResources: [
-        {
-          id: "ins-special-1",
-          category: "保單理賠",
-          title: "特定手術醫療保險理賠",
-          organization: "國泰人壽",
-          amount: "最高可理賠80%，約120,000 - 280,000元",
-          status: "eligible",
-        },
-        {
-          id: "fin-special-1",
-          category: "金融產品",
-          title: "醫療貸款專案",
-          organization: "台新銀行",
-          amount: "最高可貸款500,000元，年利率2.7%起",
-          status: "eligible",
-        },
-      ],
-    },
-    {
-      id: "treatment-2",
-      name: "質子治療",
-      description: "使用質子束進行的放射治療，相比傳統放射治療對周圍健康組織的傷害更小。",
-      averageCost: "800,000 - 1,200,000元",
-      category: "癌症治療",
-      icon: <Zap className="h-5 w-5 text-amber-600" />,
-      matchedResources: [
-        {
-          id: "ins-special-2",
-          category: "保單理賠",
-          title: "癌症特定治療保險理賠",
-          organization: "新光人壽",
-          amount: "最高可理賠1,000,000元",
-          status: "eligible",
-        },
-        {
-          id: "gov-special-1",
-          category: "政府補助",
-          title: "癌症特殊治療補助計畫",
-          organization: "衛生福利部",
-          amount: "最高可補助300,000元",
-          status: "conditional",
-        },
-      ],
-    },
-    {
-      id: "treatment-3",
-      name: "免疫細胞療法",
-      description: "使用患者自身免疫細胞對抗癌症的治療方法，如CAR-T細胞療法等。",
-      averageCost: "1,500,000 - 3,000,000元",
-      category: "癌症治療",
-      icon: <Zap className="h-5 w-5 text-amber-600" />,
-      matchedResources: [
-        {
-          id: "ins-special-3",
-          category: "保單理賠",
-          title: "創新癌症治療保險理賠",
-          organization: "富邦人壽",
-          amount: "最高可理賠2,000,000元",
-          status: "eligible",
-        },
-      ],
-    },
-    {
-      id: "treatment-4",
-      name: "特殊抗癌藥物 (如Keytruda)",
-      description: "新型免疫檢查點抑制劑，可幫助免疫系統對抗癌細胞。",
-      averageCost: "每次治療約150,000元，通常需多次治療",
-      category: "藥物",
-      icon: <Pill className="h-5 w-5 text-green-600" />,
-      matchedResources: [
-        {
-          id: "ins-special-4",
-          category: "保單理賠",
-          title: "特殊藥物保險理賠",
-          organization: "南山人壽",
-          amount: "每次治療最高可理賠100,000元",
-          status: "eligible",
-        },
-        {
-          id: "corp-special-1",
-          category: "企業福利",
-          title: "員工重大疾病用藥補助",
-          organization: "台積電",
-          amount: "每年最高補助500,000元",
-          status: "conditional",
-        },
-      ],
-    },
-    {
-      id: "treatment-5",
-      name: "人工關節置換",
-      description: "使用高品質人工關節材料進行關節置換手術。",
-      averageCost: "150,000 - 250,000元",
-      category: "手術",
-      icon: <Stethoscope className="h-5 w-5 text-blue-600" />,
-      matchedResources: [
-        {
-          id: "ins-special-5",
-          category: "保單理賠",
-          title: "特定手術醫療保險理賠",
-          organization: "國泰人壽",
-          amount: "最高可理賠70%，約105,000 - 175,000元",
-          status: "eligible",
-        },
-      ],
-    },
-    {
-      id: "treatment-6",
-      name: "微創脊椎手術",
-      description: "使用特殊器材進行的微創脊椎手術，恢復時間較短。",
-      averageCost: "200,000 - 300,000元",
-      category: "手術",
-      icon: <Stethoscope className="h-5 w-5 text-blue-600" />,
-      matchedResources: [
-        {
-          id: "ins-special-6",
-          category: "保單理賠",
-          title: "特定手術醫療保險理賠",
-          organization: "富邦人壽",
-          amount: "最高可理賠60%，約120,000 - 180,000元",
-          status: "eligible",
-        },
-      ],
-    },
-    {
-      id: "treatment-7",
-      name: "新型心臟支架",
-      description: "使用可吸收式或藥物塗層的新型心臟支架。",
-      averageCost: "80,000 - 150,000元",
-      category: "醫材",
-      icon: <Heart className="h-5 w-5 text-red-600" />,
-      matchedResources: [
-        {
-          id: "ins-special-7",
-          category: "保單理賠",
-          title: "心臟疾病特殊醫材理賠",
-          organization: "新光人壽",
-          amount: "最高可理賠90%，約72,000 - 135,000元",
-          status: "eligible",
-        },
-      ],
-    },
-    {
-      id: "treatment-8",
-      name: "高階人工水晶體",
-      description: "白內障手術中使用的多焦點或散光矯正人工水晶體。",
-      averageCost: "60,000 - 120,000元 (雙眼)",
-      category: "醫材",
-      icon: <Eye className="h-5 w-5 text-indigo-600" />,
-      matchedResources: [
-        {
-          id: "ins-special-8",
-          category: "保單理賠",
-          title: "特殊醫材保險理賠",
-          organization: "國泰人壽",
-          amount: "最高可理賠50%，約30,000 - 60,000元",
-          status: "eligible",
-        },
-      ],
-    },
-  ]
+  // 從localStorage獲取用戶保單資料
+  const getUserPolicies = () => {
+    try {
+      const policies = localStorage.getItem('insurancePolicies')
+      return policies ? JSON.parse(policies) : []
+    } catch (error) {
+      console.error('讀取保單資料失敗:', error)
+      return []
+    }
+  }
 
-  // 執行搜尋的函數
-  const executeSearch = (searchTerm) => {
-    console.log(`執行搜尋: "${searchTerm}"`)
+  // 真實的AI搜尋功能
+  const executeRealSearch = async (searchTerm) => {
+    console.log(`執行真實搜尋: "${searchTerm}"`)
 
-    // 如果搜尋詞為空，不執行搜尋
     if (!searchTerm.trim()) {
       setIsSearching(false)
       return
     }
 
-    // 設置搜尋中狀態
     setIsSearching(true)
+    
+    try {
+      // 獲取用戶保單資料
+      const userPolicies = getUserPolicies()
+      
+      // 獲取OpenAI API Key
+      const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || 'sk-temp'
+      if (apiKey === 'sk-temp' || !apiKey) {
+        throw new Error('請先在設定頁面輸入有效的 OpenAI API 金鑰')
+      }
 
-    // 清空之前的結果
-    setQuickSearchResults([])
+      // 使用OpenAI服務進行綜合搜尋
+      const openaiService = new (await import('../../lib/openaiService')).OpenAIService(apiKey)
+      const result = await openaiService.comprehensiveSearch(searchTerm, userPolicies)
+      
+      // 格式化搜尋結果以符合現有UI
+      const formattedResult = {
+        id: `search-${Date.now()}`,
+        name: searchTerm,
+        description: `關於「${searchTerm}」的醫療資源分析`,
+        averageCost: result.estimatedCost,
+        costSource: result.costSource,
+        category: "搜尋結果",
+        icon: <Search className="h-5 w-5 text-blue-600" />,
+        matchedResources: [
+          ...result.personalPolicyResults,
+          ...result.networkResources
+        ]
+      }
 
-    // 模擬搜尋延遲
-    setTimeout(() => {
-      const term = searchTerm.trim().toLowerCase()
-
-      // 更精確的搜尋邏輯
-      const results = nonCoveredTreatments.filter((treatment) => {
-        const nameLower = treatment.name.toLowerCase()
-        const descLower = treatment.description.toLowerCase()
-        const categoryLower = treatment.category.toLowerCase()
-
-        // 精確匹配名稱
-        if (nameLower === term) return true
-
-        // 名稱包含搜尋詞
-        if (nameLower.includes(term)) return true
-
-        // 描述或分類包含搜尋詞
-        if (descLower.includes(term) || categoryLower.includes(term)) return true
-
-        return false
-      })
-
-      console.log(`搜尋詞: "${term}", 找到結果: ${results.length}`)
-
-      // 更新搜尋結果
-      setQuickSearchResults(results)
+      setSearchResult(formattedResult)
+      setQuickSearchResults([formattedResult])
+      
+    } catch (error) {
+      console.error('搜尋失敗:', error)
+      // 顯示錯誤結果
+      const errorResult = {
+        id: `error-${Date.now()}`,
+        name: searchTerm,
+        description: `搜尋「${searchTerm}」時發生錯誤: ${error.message}`,
+        averageCost: "無法取得費用資訊",
+        costSource: "搜尋失敗",
+        category: "錯誤",
+        icon: <AlertCircle className="h-5 w-5 text-red-600" />,
+        matchedResources: []
+      }
+      setSearchResult(errorResult)
+      setQuickSearchResults([errorResult])
+      
+      // 如果是API Key問題，給出更明確的指引
+      if (error.message.includes('API 金鑰')) {
+        alert('請先到「設定」頁面輸入您的 OpenAI API 金鑰才能使用搜尋功能')
+      }
+    } finally {
       setIsSearching(false)
-    }, 800)
+    }
+  }
+
+  // 執行搜尋的函數 - 使用真實AI搜尋
+  const executeSearch = (searchTerm) => {
+    executeRealSearch(searchTerm)
   }
 
   // 處理搜尋按鈕點擊
@@ -1486,9 +1353,9 @@ function QuickSearchContent({
             <div className="flex items-center justify-center">
               <Search className="h-10 w-10 text-blue-600" />
             </div>
-            <h2 className="text-xl font-bold text-center">快速搜尋健保不給付項目</h2>
+            <h2 className="text-xl font-bold text-center">智能醫療資源搜尋</h2>
             <p className="text-center text-gray-500">
-              請輸入各種自費診療方式、醫材等健保不給付內容，我們將為您分析可能的保障資源
+              請輸入手術名稱、治療項目或您的病況描述，AI將搜尋您的個人保單並查找相關醫療資源
             </p>
 
             <div className="flex gap-2">
@@ -1496,7 +1363,7 @@ function QuickSearchContent({
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="例如：達文西手術、質子治療、特殊抗癌藥..."
+                  placeholder="例如：達文西攝護腺手術、心律不整治療、糖尿病足潰瘍..."
                   className="w-full pl-10 pr-4 py-3 border rounded-md"
                   value={quickSearchTerm}
                   onChange={(e) => setQuickSearchTerm(e.target.value)}
@@ -1509,13 +1376,12 @@ function QuickSearchContent({
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {["達文西手術", "質子治療", "特殊抗癌藥", "人工關節"].map((suggestion) => (
-                <Button key={suggestion} variant="outline" size="sm" onClick={() => handleSuggestionClick(suggestion)}>
-                  {suggestion}
-                </Button>
-              ))}
-            </div>
+            {!quickSearchTerm && (
+              <div className="text-center text-sm text-gray-400">
+                <p>💡 提示：您可以搜尋特定手術、治療方法，或描述您的病況</p>
+                <p>系統會優先搜尋您已上傳的保單資料，並查找相關網路資源</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1552,15 +1418,19 @@ function QuickSearchContent({
                 <div className="flex items-start gap-2 mb-4">
                   <FileText className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-sm font-medium">平均費用</p>
-                    <p className="text-sm text-gray-500">{treatment.averageCost}</p>
+                    <p className="text-sm font-medium">預估費用</p>
+                    <p className="text-sm text-gray-700">{treatment.averageCost}</p>
+                    {treatment.costSource && (
+                      <p className="text-xs text-gray-500 mt-1">📊 {treatment.costSource}</p>
+                    )}
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   <h4 className="font-medium text-sm">可能的保障資源：</h4>
 
-                  {treatment.matchedResources.map((resource) => (
+                  {treatment.matchedResources && treatment.matchedResources.length > 0 ? (
+                    treatment.matchedResources.map((resource) => (
                     <div
                       key={resource.id}
                       className={`p-3 rounded-md border ${
@@ -1602,7 +1472,16 @@ function QuickSearchContent({
                         </Link>
                       </div>
                     </div>
-                  ))}
+                    ))
+                  ) : (
+                    <div className="p-3 rounded-md border border-gray-200 bg-gray-50">
+                      <p className="text-sm text-gray-500 text-center">
+                        {getUserPolicies().length === 0 
+                          ? "📋 未找到個人保單資料，建議先到「我的資料」上傳保單" 
+                          : "🔍 未找到相關保障資源，建議諮詢保險專業人員"}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* 新增「聽聽大家怎麼說」按鈕 */}
@@ -1624,109 +1503,13 @@ function QuickSearchContent({
       {!isSearching && quickSearchTerm && quickSearchResults.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <FileSearch className="h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium mb-2">未找到相關結果</h3>
+          <h3 className="text-lg font-medium mb-2">搜尋完成</h3>
           <p className="text-gray-500 max-w-md">
-            我們未能找到與「{quickSearchTerm}」相關的健保不給付項目。請嘗試其他關鍵詞，或使用更一般性的術語。
+            未找到與「{quickSearchTerm}」相關的保單理賠或醫療資源。請嘗試使用不同的關鍵詞，或確認您已上傳相關保單資料。
           </p>
         </div>
       )}
 
-      {!isSearching && !quickSearchTerm && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Stethoscope className="h-5 w-5 text-blue-600" />
-                特殊手術
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                <li className="flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                  <Button variant="link" className="p-0 h-auto" onClick={() => handleSuggestionClick("達文西手術")}>
-                    達文西機器人手術
-                  </Button>
-                </li>
-                <li className="flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                  <Button variant="link" className="p-0 h-auto" onClick={() => handleSuggestionClick("微創脊椎手術")}>
-                    微創脊椎手術
-                  </Button>
-                </li>
-                <li className="flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                  <Button variant="link" className="p-0 h-auto" onClick={() => handleSuggestionClick("人工關節置換")}>
-                    人工關節置換
-                  </Button>
-                </li>
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Zap className="h-5 w-5 text-amber-600" />
-                癌症治療
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                <li className="flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                  <Button variant="link" className="p-0 h-auto" onClick={() => handleSuggestionClick("質子治療")}>
-                    質子治療
-                  </Button>
-                </li>
-                <li className="flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                  <Button variant="link" className="p-0 h-auto" onClick={() => handleSuggestionClick("免疫細胞療法")}>
-                    免疫細胞療法
-                  </Button>
-                </li>
-                <li className="flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                  <Button variant="link" className="p-0 h-auto" onClick={() => handleSuggestionClick("特殊抗癌藥")}>
-                    特殊抗癌藥物
-                  </Button>
-                </li>
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Heart className="h-5 w-5 text-red-600" />
-                特殊醫材
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                <li className="flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                  <Button variant="link" className="p-0 h-auto" onClick={() => handleSuggestionClick("新型心臟支架")}>
-                    新型心臟支架
-                  </Button>
-                </li>
-                <li className="flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                  <Button variant="link" className="p-0 h-auto" onClick={() => handleSuggestionClick("高階人工水晶體")}>
-                    高階人工水晶體
-                  </Button>
-                </li>
-                <li className="flex items-center gap-2">
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                  <Button variant="link" className="p-0 h-auto" onClick={() => handleSuggestionClick("特殊義肢")}>
-                    特殊義肢
-                  </Button>
-                </li>
-              </ul>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </div>
   )
 }

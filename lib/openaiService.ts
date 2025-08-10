@@ -718,6 +718,190 @@ ${imageBase64 ? '請仔細分析圖片中的病例記錄內容。\n' : ''}
   }
 
   /**
+   * 搜尋個人保單中的相關理賠項目
+   */
+  async searchPersonalPolicies(searchTerm: string, userPolicies: any[]): Promise<any[]> {
+    if (!userPolicies || userPolicies.length === 0) {
+      return [];
+    }
+
+    const matchedPolicies: any[] = [];
+    
+    for (const policy of userPolicies) {
+      // 搜尋保單條款、保障項目等相關內容
+      const policyText = JSON.stringify(policy.data || policy);
+      const searchResult = await this.analyzePolicyMatch(searchTerm, policyText, policy);
+      
+      if (searchResult.hasMatch) {
+        matchedPolicies.push({
+          id: `policy-${policy.id || Date.now()}`,
+          category: "保單理賠",
+          subcategory: "個人保單",
+          title: searchResult.matchedItem,
+          organization: policy.data?.policyBasicInfo?.insuranceCompany || "保險公司",
+          eligibility: "符合保單條款",
+          amount: searchResult.coverageAmount,
+          deadline: "依保單條款",
+          details: searchResult.details,
+          priority: "high",
+          status: "eligible",
+          matchedConditions: [searchTerm]
+        });
+      }
+    }
+    
+    return matchedPolicies;
+  }
+
+  /**
+   * 分析保單是否匹配搜尋內容
+   */
+  private async analyzePolicyMatch(searchTerm: string, policyText: string, policy: any): Promise<any> {
+    const prompt = `請分析以下保單內容是否包含與「${searchTerm}」相關的理賠項目：
+
+保單內容：
+${policyText}
+
+請分析並以JSON格式回傳：
+{
+  "hasMatch": true/false,
+  "matchedItem": "匹配的理賠項目名稱",
+  "coverageAmount": "理賠金額或比例",
+  "details": "詳細理賠說明"
+}`;
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o-mini');
+      return this.parseJSONResponse(response.content);
+    } catch (error) {
+      console.error('保單匹配分析失敗:', error);
+      return { hasMatch: false };
+    }
+  }
+
+  /**
+   * 使用AI搜尋網路醫療資源
+   */
+  async searchMedicalResources(searchTerm: string): Promise<{
+    estimatedCost: string;
+    costSource: string;
+    resources: any[];
+  }> {
+    const prompt = `請搜尋關於「${searchTerm}」的以下資訊：
+
+1. 在台灣的平均醫療費用
+2. 政府補助資源（如健保給付、特殊補助）
+3. 公益基金會或慈善機構的協助
+4. 醫療貸款或分期付款方案
+5. 企業社會責任相關資源
+
+請以JSON格式回傳最新資訊：
+{
+  "estimatedCost": "費用範圍",
+  "costDescription": "費用說明",
+  "costSource": "費用來源",
+  "resources": [
+    {
+      "title": "資源名稱",
+      "organization": "機構名稱", 
+      "category": "政府補助/公益資源/金融產品/企業福利",
+      "subcategory": "具體分類",
+      "eligibility": "申請資格",
+      "amount": "補助/貸款金額",
+      "deadline": "申請期限",
+      "details": "詳細說明",
+      "priority": "high/medium/low",
+      "status": "eligible/conditional",
+      "contactInfo": "聯絡方式或網址"
+    }
+  ]
+}`;
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o');
+      const result = this.parseJSONResponse(response.content);
+      
+      return {
+        estimatedCost: result.estimatedCost || '費用資訊查詢中',
+        costSource: result.costSource || 'AI搜尋結果',
+        resources: this.formatNetworkResources(result.resources || [])
+      };
+    } catch (error) {
+      console.error('網路醫療資源搜尋失敗:', error);
+      return {
+        estimatedCost: '無法取得費用資訊',
+        costSource: '搜尋失敗',
+        resources: []
+      };
+    }
+  }
+
+  /**
+   * 格式化網路搜尋的資源資料
+   */
+  private formatNetworkResources(resources: any[]): any[] {
+    return resources.map((resource, index) => ({
+      id: `network-${Date.now()}-${index}`,
+      category: resource.category || '其他資源',
+      subcategory: resource.subcategory || '',
+      title: resource.title || '',
+      organization: resource.organization || '',
+      eligibility: resource.eligibility || '',
+      amount: resource.amount || '',
+      deadline: resource.deadline || '',
+      matchedConditions: [],
+      details: resource.details || '',
+      priority: resource.priority || 'medium',
+      status: resource.status || 'eligible',
+      contactInfo: resource.contactInfo || ''
+    }));
+  }
+
+  /**
+   * 綜合搜尋功能 - 結合個人保單和網路資源
+   */
+  async comprehensiveSearch(searchTerm: string, userPolicies: any[]): Promise<{
+    estimatedCost: string;
+    costSource: string;
+    personalPolicyResults: any[];
+    networkResources: any[];
+    searchTerm: string;
+  }> {
+    console.log(`開始綜合搜尋: ${searchTerm}`);
+    
+    // 1. 搜尋個人保單
+    const personalPolicyResults = await this.searchPersonalPolicies(searchTerm, userPolicies);
+    
+    // 2. 搜尋網路資源
+    const networkSearch = await this.searchMedicalResources(searchTerm);
+    
+    // 3. 決定費用估算來源
+    let estimatedCost = networkSearch.estimatedCost;
+    let costSource = networkSearch.costSource;
+    
+    // 如果個人保單有匹配結果，優先使用保單資料推估費用
+    if (personalPolicyResults.length > 0) {
+      const maxCoverage = personalPolicyResults.reduce((max, policy) => {
+        const amount = policy.amount.replace(/[^0-9]/g, '');
+        return Math.max(max, parseInt(amount) || 0);
+      }, 0);
+      
+      if (maxCoverage > 0) {
+        estimatedCost = `約 ${maxCoverage.toLocaleString()} 元左右`;
+        costSource = '根據您的保單理賠額度推估';
+      }
+    }
+    
+    return {
+      estimatedCost,
+      costSource,
+      personalPolicyResults,
+      networkResources: networkSearch.resources,
+      searchTerm
+    };
+  }
+
+  /**
    * 解析 AI 回應
    */
   private parseResponse(data: any): AnalysisResult {
