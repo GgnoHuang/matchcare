@@ -680,6 +680,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
             setQuickSearchResults={setQuickSearchResults}
             isSearching={isSearching}
             setIsSearching={setIsSearching}
+            user={user}
           />
         </TabsContent>
 
@@ -1222,6 +1223,7 @@ function QuickSearchContent({
   setQuickSearchResults,
   isSearching,
   setIsSearching,
+  user,
 }) {
   // 使用useRef來跟踪當前的搜尋詞，避免閉包問題
   const currentSearchTermRef = useRef(quickSearchTerm)
@@ -1235,8 +1237,35 @@ function QuickSearchContent({
   // 從localStorage獲取用戶保單資料
   const getUserPolicies = () => {
     try {
-      const policies = localStorage.getItem('insurancePolicies')
-      return policies ? JSON.parse(policies) : []
+      if (!user?.id) {
+        console.log('❌ 快速搜尋 - 用戶未登入，無法讀取保單資料')
+        return []
+      }
+      
+      const storageKey = `matchcare_${user.id}_insurance_policies`
+      const policies = localStorage.getItem(storageKey)
+      const parsedPolicies = policies ? JSON.parse(policies) : []
+      
+      console.log(`🔍 快速搜尋 - 讀取用戶保單資料`)
+      console.log(`   📂 儲存Key: ${storageKey}`)
+      console.log(`   📊 保單數量: ${parsedPolicies.length} 筆`)
+      console.log(`   📋 原始資料:`, policies ? policies.substring(0, 200) + '...' : 'null')
+      console.log(`   📄 解析後的保單資料:`, parsedPolicies)
+      
+      // 檢查每個保單的文本內容
+      parsedPolicies.forEach((policy, index) => {
+        console.log(`   📄 保單 ${index + 1} (${policy.fileName}):`)
+        console.log(`      - ID: ${policy.id}`)
+        console.log(`      - 文本內容長度: ${(policy.textContent || '').length} 字元`)
+        console.log(`      - 文本內容預覽: ${(policy.textContent || '').substring(0, 100)}...`)
+        console.log(`      - AI分析資料:`, policy.policyInfo ? '✅ 有' : '❌ 無')
+        if (policy.policyInfo?.policyBasicInfo) {
+          console.log(`      - 保險公司: ${policy.policyInfo.policyBasicInfo.insuranceCompany || '未識別'}`)
+          console.log(`      - 保單名稱: ${policy.policyInfo.policyBasicInfo.policyName || '未識別'}`)
+        }
+      })
+      
+      return parsedPolicies
     } catch (error) {
       console.error('讀取保單資料失敗:', error)
       return []
@@ -1268,6 +1297,10 @@ function QuickSearchContent({
       const openaiService = new (await import('../../lib/openaiService')).OpenAIService(apiKey)
       const result = await openaiService.comprehensiveSearch(searchTerm, userPolicies)
       
+      console.log('綜合搜尋結果:', result)
+      console.log('個人保單匹配結果:', result.personalPolicyResults)
+      console.log('網路資源搜尋結果:', result.networkResources)
+      
       // 格式化搜尋結果以符合現有UI
       const formattedResult = {
         id: `search-${Date.now()}`,
@@ -1277,6 +1310,8 @@ function QuickSearchContent({
         costSource: result.costSource,
         category: "搜尋結果",
         icon: <Search className="h-5 w-5 text-blue-600" />,
+        personalPolicyCount: result.personalPolicyResults.length,
+        networkResourceCount: result.networkResources.length,
         matchedResources: [
           ...result.personalPolicyResults,
           ...result.networkResources
@@ -1397,7 +1432,21 @@ function QuickSearchContent({
 
       {!isSearching && quickSearchResults.length > 0 && (
         <div className="space-y-6">
-          <h3 className="text-lg font-bold">搜尋結果 ({quickSearchResults.length})</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold">搜尋結果 ({quickSearchResults.length})</h3>
+            {quickSearchResults[0]?.personalPolicyCount !== undefined && (
+              <div className="flex gap-4 text-sm text-gray-600">
+                <span className="flex items-center gap-1">
+                  <Shield className="h-4 w-4 text-teal-600" />
+                  個人保單: {quickSearchResults[0].personalPolicyCount}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Building className="h-4 w-4 text-blue-600" />
+                  其他資源: {quickSearchResults[0].networkResourceCount}
+                </span>
+              </div>
+            )}
+          </div>
 
           {quickSearchResults.map((treatment) => (
             <Card key={treatment.id} className="overflow-hidden">
@@ -1445,7 +1494,14 @@ function QuickSearchContent({
                         <div>
                           <div className="flex items-center gap-2">
                             {resource.category === "保單理賠" ? (
-                              <Shield className="h-4 w-4 text-teal-600" />
+                              <>
+                                <Shield className="h-4 w-4 text-teal-600" />
+                                {resource.sourcePolicy && (
+                                  <Badge variant="outline" className="bg-teal-50 text-teal-700 text-xs">
+                                    您的保單
+                                  </Badge>
+                                )}
+                              </>
                             ) : resource.category === "政府補助" ? (
                               <Building className="h-4 w-4 text-blue-600" />
                             ) : (
@@ -1454,6 +1510,11 @@ function QuickSearchContent({
                             <p className="font-medium text-sm">{resource.title}</p>
                           </div>
                           <p className="text-xs text-gray-500 mt-1">{resource.organization}</p>
+                          {resource.aiAnalysis?.confidenceLevel && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              🤖 AI信心度: {resource.aiAnalysis.confidenceLevel}
+                            </p>
+                          )}
                         </div>
                         <Badge className={resource.status === "eligible" ? "bg-green-600" : "bg-amber-600"}>
                           {resource.status === "eligible" ? "符合條件" : "條件性符合"}

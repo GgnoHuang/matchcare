@@ -96,6 +96,28 @@ private generateImageUrl(imageBase64: string): string {
 - 信心度評估（high/medium/low）
 - 詳細風險提醒
 
+### ✅ 保單名稱智能識別功能 (已完成)
+**檔案**: `/lib/openaiService.ts`, `/app/my-data/page.tsx`
+
+#### 問題解決
+- **用戶需求**: 保單列表顯示檔案名稱而非實際保單名稱
+- **解決方案**: AI分析識別保單正式名稱和類型
+
+#### 技術實現
+1. **增強AI提示詞**: `analyzeInsurancePolicy` 方法
+   - 新增 `policyName` 和 `policyType` 欄位
+   - 詳細的保單名稱識別指引
+   - 常見保單類型參考（壽險、醫療險、意外險等）
+
+2. **顯示邏輯優化**: `getPolicyDisplayTitle()` 函數
+   - 優先級: AI識別保單名稱 → 保險公司+類型 → 檔案名稱
+   - 格式: `保單名稱 (保險類型)` 或 `保險公司 - 保險類型`
+
+3. **UI改善**:
+   - 保單列表標題使用AI識別名稱
+   - 顯示原檔案名稱作為參考
+   - 增加保單名稱和類型的詳細資訊顯示
+
 ## 🚨 已知待處理事項
 
 ### Phase 2 - 病歷管理進階功能

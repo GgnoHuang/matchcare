@@ -62,6 +62,88 @@ export default function MyDataPage() {
   const [isClearingData, setIsClearingData] = useState<boolean>(false)
   const [viewingTextContent, setViewingTextContent] = useState<string | null>(null)
 
+  // 輔助函數：生成保單顯示標題
+  const getPolicyDisplayTitle = (policy: InsurancePolicy): string => {
+    const policyInfo = policy.policyInfo?.policyBasicInfo
+    
+    // 優先使用AI識別的保單名稱和類型
+    if (policyInfo?.policyName && policyInfo.policyName !== '待輸入') {
+      if (policyInfo?.policyType && policyInfo.policyType !== '待輸入') {
+        return `${policyInfo.policyName} (${policyInfo.policyType})`
+      }
+      return policyInfo.policyName
+    }
+    
+    // 次選：使用保險公司名稱 + 保險保單
+    if (policyInfo?.insuranceCompany && policyInfo.insuranceCompany !== '待輸入') {
+      const policyTypeText = policyInfo?.policyType && policyInfo.policyType !== '待輸入' 
+        ? policyInfo.policyType 
+        : '保險保單'
+      return `${policyInfo.insuranceCompany} - ${policyTypeText}`
+    }
+    
+    // 最後選項：使用檔案名稱
+    return policy.fileName
+  }
+
+  // 輔助函數：生成病歷記錄顯示標題
+  const getMedicalRecordDisplayTitle = (record: MedicalRecord): string => {
+    const medicalInfo = record.medicalInfo
+    
+    // 優先使用AI識別的文件標題和醫療主題
+    if (medicalInfo?.documentTitle && medicalInfo.documentTitle !== '待輸入') {
+      if (medicalInfo?.medicalSubject && medicalInfo.medicalSubject !== '待輸入') {
+        return `${medicalInfo.documentTitle} - ${medicalInfo.medicalSubject}`
+      }
+      return medicalInfo.documentTitle
+    }
+    
+    // 次選：使用文件類型 + 醫療主題
+    if (medicalInfo?.documentType && medicalInfo.documentType !== '待輸入') {
+      const subjectText = medicalInfo?.medicalSubject && medicalInfo.medicalSubject !== '待輸入' 
+        ? ` - ${medicalInfo.medicalSubject}` 
+        : ''
+      return `${medicalInfo.documentType}${subjectText}`
+    }
+    
+    // 第三選項：使用醫療主題
+    if (medicalInfo?.medicalSubject && medicalInfo.medicalSubject !== '待輸入') {
+      return `病歷記錄 - ${medicalInfo.medicalSubject}`
+    }
+    
+    // 最後選項：使用檔案名稱
+    return record.fileName
+  }
+
+  // 輔助函數：生成診斷證明顯示標題
+  const getDiagnosisCertificateDisplayTitle = (certificate: DiagnosisCertificate): string => {
+    const diagnosisInfo = certificate.diagnosisInfo
+    
+    // 優先使用AI識別的文件標題和醫療主題
+    if (diagnosisInfo?.documentTitle && diagnosisInfo.documentTitle !== '待輸入') {
+      if (diagnosisInfo?.medicalSubject && diagnosisInfo.medicalSubject !== '待輸入') {
+        return `${diagnosisInfo.documentTitle} - ${diagnosisInfo.medicalSubject}`
+      }
+      return diagnosisInfo.documentTitle
+    }
+    
+    // 次選：使用證明書類型 + 醫療主題
+    if (diagnosisInfo?.certificateType && diagnosisInfo.certificateType !== '待輸入') {
+      const subjectText = diagnosisInfo?.medicalSubject && diagnosisInfo.medicalSubject !== '待輸入' 
+        ? ` - ${diagnosisInfo.medicalSubject}` 
+        : ''
+      return `${diagnosisInfo.certificateType}${subjectText}`
+    }
+    
+    // 第三選項：使用醫療主題
+    if (diagnosisInfo?.medicalSubject && diagnosisInfo.medicalSubject !== '待輸入') {
+      return `診斷證明 - ${diagnosisInfo.medicalSubject}`
+    }
+    
+    // 最後選項：使用檔案名稱
+    return certificate.fileName
+  }
+
   // 檢查用戶登入狀態
   useEffect(() => {
     const fetchUser = async () => {
@@ -603,8 +685,11 @@ export default function MyDataPage() {
                         <FileImage className="h-4 w-4 text-blue-500" />
                       )}
                       <div>
-                        <p className="font-medium text-sm">{record.fileName}</p>
+                        <p className="font-medium text-sm">{getMedicalRecordDisplayTitle(record)}</p>
                         <p className="text-xs text-gray-500">{formatDate(record.uploadDate)}</p>
+                        {record.fileName !== getMedicalRecordDisplayTitle(record) && (
+                          <p className="text-xs text-gray-400">檔案：{record.fileName}</p>
+                        )}
                       </div>
                     </div>
                     <Badge variant="outline" className="text-xs">
@@ -635,8 +720,11 @@ export default function MyDataPage() {
                         <FileImage className="h-4 w-4 text-blue-500" />
                       )}
                       <div>
-                        <p className="font-medium text-sm">{policy.fileName}</p>
+                        <p className="font-medium text-sm">{getPolicyDisplayTitle(policy)}</p>
                         <p className="text-xs text-gray-500">{formatDate(policy.uploadDate)}</p>
+                        {policy.fileName !== getPolicyDisplayTitle(policy) && (
+                          <p className="text-xs text-gray-400">檔案：{policy.fileName}</p>
+                        )}
                       </div>
                     </div>
                     <Badge variant="outline" className="text-xs">
@@ -667,8 +755,11 @@ export default function MyDataPage() {
                         <FileImage className="h-4 w-4 text-blue-500" />
                       )}
                       <div>
-                        <p className="font-medium text-sm">{certificate.fileName}</p>
+                        <p className="font-medium text-sm">{getDiagnosisCertificateDisplayTitle(certificate)}</p>
                         <p className="text-xs text-gray-500">{formatDate(certificate.uploadDate)}</p>
+                        {certificate.fileName !== getDiagnosisCertificateDisplayTitle(certificate) && (
+                          <p className="text-xs text-gray-400">檔案：{certificate.fileName}</p>
+                        )}
                       </div>
                     </div>
                     <Badge variant="outline" className="text-xs">
@@ -742,7 +833,10 @@ export default function MyDataPage() {
                       )}
                     </div>
                     <div>
-                      <h3 className="font-semibold">{record.fileName}</h3>
+                      <h3 className="font-semibold">{getMedicalRecordDisplayTitle(record)}</h3>
+                      {record.fileName !== getMedicalRecordDisplayTitle(record) && (
+                        <p className="text-xs text-gray-400 mt-0.5">檔案：{record.fileName}</p>
+                      )}
                       <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
@@ -830,7 +924,10 @@ export default function MyDataPage() {
                       )}
                     </div>
                     <div>
-                      <h3 className="font-semibold">{policy.fileName}</h3>
+                      <h3 className="font-semibold">{getPolicyDisplayTitle(policy)}</h3>
+                      {policy.fileName !== getPolicyDisplayTitle(policy) && (
+                        <p className="text-xs text-gray-400 mt-0.5">檔案：{policy.fileName}</p>
+                      )}
                       <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
@@ -843,25 +940,37 @@ export default function MyDataPage() {
                       </div>
                       {policy.policyInfo && (
                         <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
-                          {policy.policyInfo.policyBasicInfo?.insuranceCompany && (
+                          {policy.policyInfo.policyBasicInfo?.policyName && policy.policyInfo.policyBasicInfo.policyName !== '待輸入' && (
+                            <div>
+                              <span className="text-gray-500">保單名稱: </span>
+                              <span className="font-medium">{policy.policyInfo.policyBasicInfo.policyName}</span>
+                            </div>
+                          )}
+                          {policy.policyInfo.policyBasicInfo?.policyType && policy.policyInfo.policyBasicInfo.policyType !== '待輸入' && (
+                            <div>
+                              <span className="text-gray-500">保險類型: </span>
+                              <span className="font-medium">{policy.policyInfo.policyBasicInfo.policyType}</span>
+                            </div>
+                          )}
+                          {policy.policyInfo.policyBasicInfo?.insuranceCompany && policy.policyInfo.policyBasicInfo.insuranceCompany !== '待輸入' && (
                             <div>
                               <span className="text-gray-500">保險公司: </span>
                               <span className="font-medium">{policy.policyInfo.policyBasicInfo.insuranceCompany}</span>
                             </div>
                           )}
-                          {policy.policyInfo.policyBasicInfo?.policyNumber && (
+                          {policy.policyInfo.policyBasicInfo?.policyNumber && policy.policyInfo.policyBasicInfo.policyNumber !== '待輸入' && (
                             <div>
                               <span className="text-gray-500">保單號碼: </span>
                               <span className="font-medium">{policy.policyInfo.policyBasicInfo.policyNumber}</span>
                             </div>
                           )}
-                          {policy.policyInfo.policyBasicInfo?.effectiveDate && (
+                          {policy.policyInfo.policyBasicInfo?.effectiveDate && policy.policyInfo.policyBasicInfo.effectiveDate !== '待輸入' && (
                             <div>
                               <span className="text-gray-500">生效日期: </span>
                               <span className="font-medium">{policy.policyInfo.policyBasicInfo.effectiveDate}</span>
                             </div>
                           )}
-                          {policy.policyInfo.insuranceContentAndFees?.insuranceAmount && (
+                          {policy.policyInfo.insuranceContentAndFees?.insuranceAmount && policy.policyInfo.insuranceContentAndFees.insuranceAmount !== '待輸入' && (
                             <div>
                               <span className="text-gray-500">保險金額: </span>
                               <span className="font-medium">{policy.policyInfo.insuranceContentAndFees.insuranceAmount}</span>
@@ -946,7 +1055,10 @@ export default function MyDataPage() {
                       )}
                     </div>
                     <div>
-                      <h3 className="font-semibold">{certificate.fileName}</h3>
+                      <h3 className="font-semibold">{getDiagnosisCertificateDisplayTitle(certificate)}</h3>
+                      {certificate.fileName !== getDiagnosisCertificateDisplayTitle(certificate) && (
+                        <p className="text-xs text-gray-400 mt-0.5">檔案：{certificate.fileName}</p>
+                      )}
                       <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />

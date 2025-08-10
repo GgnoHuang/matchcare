@@ -493,6 +493,9 @@ ${text ? `輔助文字資料：\n${text}\n` : ''}
 請將識別到的具體文字內容填入JSON結構：
 
 {
+  "documentTitle": "診斷證明書的正式標題（如：診斷證明書、病假證明書、醫師診斷書等）",
+  "certificateType": "證明書類型分類（診斷證明/病假證明/復工證明/體檢證明）",
+  "medicalSubject": "主要診斷疾病或醫療主題（如：感冒診斷、骨折證明、產後休養等）",
   "patientName": "從圖片中識別到的完整病患姓名",
   "birthDate": "完整出生日期（保持原始格式，如：民國72年5月3日 或 1983/05/03）",
   "idNumber": "完整身分證字號（如：A123456789）", 
@@ -591,9 +594,23 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
 
 **文件標頭區**
 - 保險公司完整名稱和標誌
-- 保單種類標題（如：終身壽險保單、醫療保險保單等）
+- **保單正式名稱**（重點識別，如：終身壽險保單、醫療保險保單、重大疾病保險、意外傷害保險等）
+- **保險類型分類**（壽險、醫療險、意外險、重疾險、儲蓄險、投資型保險等）
 - 保單號碼或契約號碼
 - 文件版本或印刷日期
+
+### 🎯 保單名稱識別重點
+請特別注意文件中的以下位置來識別保單名稱：
+- **封面標題**：通常會有完整的保單正式名稱
+- **條款標題**：如「○○終身壽險保單條款」
+- **保障說明**：描述具體保險類型和內容
+- **契約書標頭**：正式的保單契約名稱
+
+常見保單類型參考：
+- 壽險類：終身壽險、定期壽險、儲蓄型壽險
+- 醫療類：住院醫療險、手術險、癌症險、重大疾病險
+- 意外類：意外傷害險、意外醫療險、旅行險
+- 投資類：投資型保險、變額壽險、萬能壽險
 
 **基本契約資訊區**
 - 保險契約生效日期
@@ -652,6 +669,8 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
 {
   "policyBasicInfo": {
     "insuranceCompany": "從圖片識別的保險公司完整名稱",
+    "policyName": "保單正式名稱（如：終身壽險保單、醫療保險保單、重大疾病保險等）",
+    "policyType": "保險類型（如：壽險、醫療險、意外險、重疾險、儲蓄險等）",
     "policyNumber": "完整保單號碼或契約號碼",
     "effectiveDate": "保單生效日期（保持原始格式）",
     "policyTerms": "主要保險條款和保障內容的具體描述",
@@ -750,6 +769,8 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
       return {
         policyBasicInfo: {
           insuranceCompany: "待輸入",
+          policyName: "待輸入",
+          policyType: "待輸入",
           policyNumber: "待輸入",
           effectiveDate: "待輸入",
           policyTerms: "待輸入",
@@ -852,6 +873,9 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
 請將OCR識別的**具體內容**填入JSON，避免使用模糊描述：
 
 {
+  "documentTitle": "病歷文件的正式標題或類型（如：門診病歷、住院病歷、檢查報告、手術記錄等）",
+  "documentType": "文件類型分類（門診記錄/住院記錄/檢查報告/手術記錄/出院病摘）",
+  "medicalSubject": "主要疾病或醫療主題（如：糖尿病門診、心臟手術、健康檢查等）",
   "clinicalRecord": "完整的臨床記錄文字，包含日期、科別、主訴、診斷、處置等具體內容",
   "admissionRecord": "入院相關記錄的完整文字內容", 
   "surgeryRecord": "手術記錄的詳細文字描述",
@@ -917,6 +941,9 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
       
       // 如果解析失敗，返回預設結構
       return {
+        documentTitle: "待輸入",
+        documentType: "待輸入",
+        medicalSubject: "待輸入",
         clinicalRecord: "待輸入",
         admissionRecord: "待輸入",
         surgeryRecord: "待輸入", 
@@ -935,14 +962,22 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
    * 搜尋個人保單中的相關理賠項目
    */
   async searchPersonalPolicies(searchTerm: string, userPolicies: any[]): Promise<any[]> {
+    console.log(`🔍 開始搜尋個人保單`)
+    console.log(`   🔎 搜尋詞: "${searchTerm}"`)
+    console.log(`   📊 收到保單數量: ${userPolicies ? userPolicies.length : 0}`)
+    
     if (!userPolicies || userPolicies.length === 0) {
+      console.log(`❌ 沒有保單資料可供搜尋`)
       return [];
     }
 
     const matchedPolicies: any[] = [];
     
-    for (const policy of userPolicies) {
-      console.log(`分析保單: ${policy.fileName || policy.id}`, policy);
+    for (let i = 0; i < userPolicies.length; i++) {
+      const policy = userPolicies[i]
+      console.log(`\n📄 分析保單 ${i + 1}/${userPolicies.length}: ${policy.fileName || policy.id}`)
+      console.log(`   📝 原始文本長度: ${(policy.textContent || '').length} 字元`)
+      console.log(`   🤖 AI分析資料:`, policy.policyInfo ? '✅ 有' : '❌ 無');
       
       // 組合完整的保單內容：原始文本 + 結構化資料
       const originalText = policy.textContent || '';
@@ -958,12 +993,46 @@ ${originalText}
 ${structuredData}
       `.trim();
       
-      console.log(`完整保單內容長度: ${fullPolicyContent.length} 字元`);
+      console.log(`   💾 完整保單內容長度: ${fullPolicyContent.length} 字元`);
+      
+      // 檢查保單是否有實質內容
+      const hasTextContent = (policy.textContent || '').length > 100;
+      const hasStructuredData = policy.policyInfo && Object.keys(policy.policyInfo).length > 0;
+      
+      if (!hasTextContent && !hasStructuredData) {
+        console.log(`   ⚠️  保單內容不足，跳過分析`)
+        continue;
+      }
+      
+      // 添加延遲避免API請求過於頻繁
+      if (i > 0) {
+        console.log(`   ⏳ 等待1秒避免API限制...`)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
       
       const searchResult = await this.analyzePolicyMatch(searchTerm, fullPolicyContent, policy);
+      console.log(`   🎯 AI分析結果:`, searchResult)
       
       if (searchResult.hasMatch) {
+        console.log(`   ✅ 找到匹配！信心度: ${searchResult.confidenceLevel}, 匹配類型: ${searchResult.matchType}`);
         const insuranceCompany = policy.policyInfo?.policyBasicInfo?.insuranceCompany || '未知保險公司';
+        const policyName = policy.policyInfo?.policyBasicInfo?.policyName || '';
+        
+        // 智能生成組織顯示名稱
+        let organizationDisplay = insuranceCompany;
+        
+        // 如果有保單名稱且不同於保險公司名稱，優先顯示
+        if (policyName && policyName !== '待輸入' && policyName !== insuranceCompany) {
+          organizationDisplay = `${insuranceCompany} - ${policyName}`;
+        }
+        
+        // 只在檔案名稱提供額外信息時才顯示
+        if (policy.fileName && 
+            !organizationDisplay.includes(policy.fileName) && 
+            !policy.fileName.includes(insuranceCompany) &&
+            policy.fileName.length > 10) { // 避免顯示過短的檔名
+          organizationDisplay += ` (檔案：${policy.fileName})`;
+        }
         
         // 根據AI分析的信心度決定優先級
         const priority = searchResult.confidenceLevel === 'high' ? 'high' : 
@@ -982,7 +1051,7 @@ ${structuredData}
           category: "保單理賠",
           subcategory: `個人保單 (${searchResult.matchType || '相關保障'})`,
           title: searchResult.matchedItem || `${insuranceCompany} - ${searchTerm}相關保障`,
-          organization: `${insuranceCompany} | 來源：${policy.fileName}`,
+          organization: organizationDisplay,
           eligibility: `符合保單條款 (可信度：${searchResult.confidenceLevel || 'medium'})`,
           amount: searchResult.coverageAmount || "依保單條款",
           deadline: "依保單條款",
@@ -999,10 +1068,25 @@ ${structuredData}
           }
         });
         
-        console.log(`找到匹配項目:`, searchResult);
+        console.log(`   📋 已加入匹配結果`);
       } else {
-        console.log(`保單 ${policy.fileName} 無匹配項目`);
+        console.log(`   ❌ 未找到匹配項目，原因: ${searchResult.reason || '不符合條件'}`);
       }
+    }
+    
+    console.log(`\n📊 個人保單搜尋完成`)
+    console.log(`   🔍 搜尋詞: "${searchTerm}"`)
+    console.log(`   📄 分析保單數: ${userPolicies.length}`)
+    console.log(`   ✅ 匹配結果數: ${matchedPolicies.length}`)
+    
+    if (matchedPolicies.length > 0) {
+      matchedPolicies.forEach((match, index) => {
+        console.log(`   📋 匹配 ${index + 1}: ${match.title}`)
+        console.log(`      - 信心度: ${match.aiAnalysis?.confidenceLevel}`)
+        console.log(`      - 匹配類型: ${match.aiAnalysis?.matchType}`)
+      })
+    } else {
+      console.log(`   ⚠️  沒有找到任何匹配的保單項目`)
     }
     
     return matchedPolicies;
@@ -1012,6 +1096,10 @@ ${structuredData}
    * 分析保單是否匹配搜尋內容
    */
   private async analyzePolicyMatch(searchTerm: string, policyText: string, policy: any): Promise<any> {
+    console.log(`      🤖 開始AI保單匹配分析`)
+    console.log(`         🔎 搜尋詞: "${searchTerm}"`)
+    console.log(`         📝 保單文本長度: ${policyText.length} 字元`)
+    
     const prompt = `你是資深的保險理賠專家和醫療顧問，具備深厚的醫學知識和保險法規經驗。請運用專業智能分析以下保單，判斷與「${searchTerm}」的關聯性。
 
 保單完整內容：
@@ -1058,13 +1146,22 @@ ${policyText}
 重要：這不是簡單的文字搜尋，而是基於醫學和保險專業知識的智能分析。`;
 
     try {
-      console.log(`發送保單分析請求，搜尋詞: ${searchTerm}`);
+      console.log(`         📞 調用OpenAI API...`)
       const response = await this.callAPI(prompt, 'gpt-4o-mini');
-      console.log(`保單分析回應:`, response.content);
-      return this.parseJSONResponse(response.content);
+      console.log(`         ✅ API回應長度: ${response.content?.length || 0} 字元`)
+      console.log(`         📄 原始回應: ${response.content?.substring(0, 200)}...`)
+      
+      const parsedResult = this.parseJSONResponse(response.content);
+      console.log(`         🎯 解析結果:`, parsedResult)
+      
+      return parsedResult;
     } catch (error) {
-      console.error('保單匹配分析失敗:', error);
-      return { hasMatch: false };
+      console.error('         ❌ 保單匹配分析失敗:', error);
+      return { 
+        hasMatch: false, 
+        reason: `API調用失敗: ${error.message}`,
+        confidenceLevel: 'none'
+      };
     }
   }
 
