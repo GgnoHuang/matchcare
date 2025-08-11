@@ -33,6 +33,7 @@ import {
   Heart,
   Eye,
   ChevronRight,
+  ChevronDown,
   MessageSquare,
   ExternalLink,
   Key,
@@ -44,7 +45,7 @@ import { OpenAIService, CaseData, ResourceItem, MedicalAnalysisResult } from "@/
 import { checkAuth } from "@/app/actions/auth-service"
 import { userDataService } from "@/lib/storage"
 
-export default function AIResourcesPage() {
+function AIResourcesPage() {
   // 主要功能切換狀態
   const [mainFeature, setMainFeature] = useState("quick-search")
 
@@ -55,6 +56,7 @@ export default function AIResourcesPage() {
   const [activeTab, setActiveTab] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [isAnalysisReportCollapsed, setIsAnalysisReportCollapsed] = useState(false)
 
   // AI 分析相關狀態
   const [apiKey, setApiKey] = useState("") // 將從帳號設定讀取
@@ -895,20 +897,34 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
               {/* AI 分析結果 */}
               {aiAnalysisResult && (
                 <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Brain className="h-5 w-5 text-blue-600" />
-                      AI 分析報告
-                    </CardTitle>
+                  <CardHeader 
+                    className="cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => setIsAnalysisReportCollapsed(!isAnalysisReportCollapsed)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Brain className="h-5 w-5 text-blue-600" />
+                        <CardTitle>AI 分析報告</CardTitle>
+                      </div>
+                      <Button variant="ghost" size="sm">
+                        {isAnalysisReportCollapsed ? (
+                          <ChevronRight className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
                     <CardDescription>基於您上傳的醫療文件的詳細分析結果</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="prose max-w-none">
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                        {aiAnalysisResult}
+                  {!isAnalysisReportCollapsed && (
+                    <CardContent>
+                      <div className="prose max-w-none">
+                        <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                          {aiAnalysisResult}
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
+                    </CardContent>
+                  )}
                 </Card>
               )}
 
@@ -1718,3 +1734,5 @@ function ResourceCard({ resource }) {
     </Card>
   )
 }
+
+export default AIResourcesPage

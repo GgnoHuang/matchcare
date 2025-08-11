@@ -3,7 +3,8 @@
  * 使用 PDF.js 提取 PDF 文字內容
  */
 
-import type { TextItem } from 'pdfjs-dist/types/src/display/api';
+// 僅在客戶端定義類型
+let TextItem: any = null;
 
 // 動態導入 PDF.js，避免 SSR 問題
 const loadPDFJS = async () => {
@@ -12,9 +13,14 @@ const loadPDFJS = async () => {
     return null;
   }
   
-  const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `${window.location.origin}/pdf.worker.min.js`;
-  return pdfjsLib;
+  try {
+    const pdfjsLib = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `${window.location.origin}/pdf.worker.min.js`;
+    return pdfjsLib;
+  } catch (error) {
+    console.error('無法載入 PDF.js:', error);
+    return null;
+  }
 };
 
 export class PDFUtils {
@@ -45,7 +51,7 @@ export class PDFUtils {
         const textContent = await page.getTextContent();
         
         const pageText = textContent.items
-          .map((item) => (item as TextItem).str)
+          .map((item: any) => item.str)
           .join(' ');
         
         fullText += `第 ${pageNum} 頁:\n${pageText}\n\n`;

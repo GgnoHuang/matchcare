@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FileText, Plus, FileSearch, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
+import { FileText, Plus, FileSearch, Clock, CheckCircle2, XCircle, AlertCircle, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useState, useEffect } from "react"
@@ -56,6 +56,32 @@ export default function ClaimsPage() {
   useEffect(() => {
     if (user?.id) {
       loadUserClaims()
+    }
+  }, [user])
+
+  // 監聽頁面可見性變化，重新載入資料
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user?.id) {
+        console.log('頁面重新可見，重新載入理賠申請資料')
+        loadUserClaims()
+      }
+    }
+
+    const handleFocus = () => {
+      if (user?.id) {
+        console.log('頁面獲得焦點，重新載入理賠申請資料')
+        loadUserClaims()
+      }
+    }
+
+    // 監聽頁面可見性和焦點事件
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
     }
   }, [user])
 
@@ -157,7 +183,15 @@ export default function ClaimsPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">理賠管理</h1>
           <p className="text-gray-500 mt-1 text-sm md:text-base">管理您的理賠申請並追蹤處理進度</p>
         </div>
-        <div className="w-full md:w-auto">
+        <div className="flex gap-2 w-full md:w-auto">
+          <Button 
+            variant="outline" 
+            onClick={loadUserClaims}
+            className="gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            重新載入
+          </Button>
           <Link href="/claims/new">
             <Button className="gap-2 w-full md:w-auto">
               <Plus className="h-4 w-4" />

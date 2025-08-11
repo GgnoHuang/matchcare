@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, FileText, Shield, Calendar, CheckCircle2, Clock, AlertCircle, Download } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 
-export default function ClaimStatusPage({ params }: { params: { id: string } }) {
-  const claimId = params.id
+export default async function ClaimStatusPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: claimId } = await params
 
   // 假設的理賠資料
   const claim = {
