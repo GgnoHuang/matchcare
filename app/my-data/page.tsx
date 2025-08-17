@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -40,6 +41,11 @@ import {
 } from "@/lib/storage"
 
 export default function MyDataPage() {
+  // URL參數
+  const searchParams = useSearchParams()
+  const editId = searchParams.get('edit')
+  const editType = searchParams.get('type')
+  
   // 用戶狀態
   const [user, setUser] = useState<{ id: string, name: string } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -183,6 +189,15 @@ export default function MyDataPage() {
       setInsurancePolicies(policies)
       setDiagnosisCertificates(certificates)
       setStats(statistics)
+      
+      // 檢查URL參數，自動開啟編輯模式
+      if (editId && editType === 'policy') {
+        const targetPolicy = policies.find(p => p.id === editId)
+        if (targetPolicy) {
+          setEditingPolicy(targetPolicy)
+          setActiveTab('policies') // 切換到保單分頁
+        }
+      }
     } catch (error) {
       console.error('載入用戶資料失敗:', error)
     }

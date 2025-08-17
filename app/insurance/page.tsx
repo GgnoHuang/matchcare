@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Shield, Upload, Plus, Calendar, Banknote, AlertCircle, Sparkles, BookOpen, FileSearch } from "lucide-react"
+import { Shield, Upload, Plus, Calendar, Banknote, AlertCircle, Sparkles, BookOpen, FileSearch, Settings } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useState, useEffect } from "react"
@@ -422,6 +422,12 @@ export default function InsurancePage() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                    <Link href={`/my-data?edit=${policy.id}&type=policy`} className="w-full sm:w-auto">
+                      <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto">
+                        <Settings className="h-4 w-4" />
+                        編輯
+                      </Button>
+                    </Link>
                     <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
                       <Button size="sm" variant="outline" className="w-full sm:w-auto">
                         檢查理賠資格
@@ -541,6 +547,12 @@ export default function InsurancePage() {
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                      <Link href={`/my-data?edit=${policy.id}&type=policy`} className="w-full sm:w-auto">
+                        <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto">
+                          <Settings className="h-4 w-4" />
+                          編輯
+                        </Button>
+                      </Link>
                       <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
                         <Button size="sm" variant="outline" className="w-full sm:w-auto">
                           檢查理賠資格
@@ -655,6 +667,12 @@ export default function InsurancePage() {
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                      <Link href={`/my-data?edit=${policy.id}&type=policy`} className="w-full sm:w-auto">
+                        <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto">
+                          <Settings className="h-4 w-4" />
+                          編輯
+                        </Button>
+                      </Link>
                       <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
                         <Button size="sm" variant="outline" className="w-full sm:w-auto">
                           檢查理賠資格
@@ -769,6 +787,12 @@ export default function InsurancePage() {
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                      <Link href={`/my-data?edit=${policy.id}&type=policy`} className="w-full sm:w-auto">
+                        <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto">
+                          <Settings className="h-4 w-4" />
+                          編輯
+                        </Button>
+                      </Link>
                       <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
                         <Button size="sm" variant="outline" className="w-full sm:w-auto">
                           檢查理賠資格
