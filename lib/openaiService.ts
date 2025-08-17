@@ -718,6 +718,7 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
     "policyType": "保險類型（如：壽險、醫療險、意外險、重疾險、儲蓄險等）",
     "policyNumber": "完整保單號碼或契約號碼",
     "effectiveDate": "保單生效日期（保持原始格式）",
+    "expiryDate": "保單到期日期（如果有明確標示的話）",
     "policyTerms": "主要保險條款和保障內容的具體描述",
     "insurancePeriod": "保險期間的完整表述"
   },
@@ -818,6 +819,7 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
           policyType: "待輸入",
           policyNumber: "待輸入",
           effectiveDate: "待輸入",
+          expiryDate: "待輸入",
           policyTerms: "待輸入",
           insurancePeriod: "待輸入"
         },

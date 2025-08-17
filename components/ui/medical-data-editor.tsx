@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Edit3, Check, X, Calendar, FileText, Shield } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Edit3, Check, X, Calendar, FileText, Shield, Plus, Trash2 } from "lucide-react"
 import { MedicalRecord, DiagnosisCertificate, InsurancePolicy } from "@/lib/storage"
 
 interface MedicalDataEditorProps {
@@ -62,50 +63,21 @@ export default function MedicalDataEditor({
     }
 
     if (policy) {
+      // 映射為Zoe的簡潔欄位結構
+      const policyInfo = policy.policyInfo || {}
       return {
         type: 'policy',
-        data: policy.policyInfo || {
-          policyBasicInfo: {
-            insuranceCompany: "待輸入",
-            policyNumber: "待輸入",
-            effectiveDate: "待輸入",
-            policyTerms: "待輸入",
-            insurancePeriod: "待輸入"
-          },
-          policyHolderInfo: {
-            name: "待輸入",
-            birthDate: "待輸入",
-            idNumber: "待輸入",
-            occupation: "待輸入",
-            contactAddress: "待輸入"
-          },
-          insuredPersonInfo: {
-            name: "待輸入",
-            birthDate: "待輸入",
-            gender: "待輸入",
-            idNumber: "待輸入",
-            occupation: "待輸入",
-            contactAddress: "待輸入"
-          },
-          beneficiaryInfo: {
-            name: "待輸入",
-            relationshipToInsured: "待輸入",
-            benefitRatio: "待輸入"
-          },
-          insuranceContentAndFees: {
-            insuranceAmount: "待輸入",
-            paymentMethod: "待輸入",
-            paymentPeriod: "待輸入",
-            dividendDistribution: "待輸入"
-          },
-          otherMatters: {
-            automaticPremiumLoan: "待輸入",
-            additionalClauses: "待輸入"
-          },
-          insuranceServiceInfo: {
-            customerServiceHotline: "待輸入",
-            claimsProcessIntro: "待輸入"
-          }
+        originalData: policyInfo, // 保留原始完整資料
+        data: {
+          // Zoe 欄位映射
+          company: policyInfo.policyBasicInfo?.insuranceCompany || "",
+          policyType: policyInfo.policyBasicInfo?.policyType || "",
+          policyName: policyInfo.policyBasicInfo?.policyName || "",
+          policyNumber: policyInfo.policyBasicInfo?.policyNumber || "",
+          startDate: policyInfo.policyBasicInfo?.effectiveDate || "",
+          endDate: policyInfo.policyBasicInfo?.expiryDate || "",
+          insuredPerson: policyInfo.insuredPersonInfo?.name || "",
+          beneficiary: policyInfo.beneficiaryInfo?.name || "",
         }
       }
     }
@@ -113,9 +85,41 @@ export default function MedicalDataEditor({
     return { type: null, data: {} }
   })
 
+  // 保障範圍的狀態管理 (僅保單類型使用)
+  const [coverageItems, setCoverageItems] = useState(() => {
+    if (policy) {
+      // 從AI分析的保障內容或條款中提取保障項目
+      const policyInfo = policy.policyInfo || {}
+      const existingCoverage = policyInfo.coverageDetails || []
+      
+      if (existingCoverage.length > 0) {
+        return existingCoverage.map((item: any, index: number) => ({
+          id: (index + 1).toString(),
+          name: item.coverageType || item.name || "",
+          amount: item.maxAmount || item.amount || "",
+          unit: item.unit || "元"
+        }))
+      } else {
+        // 預設一個保障項目
+        return [{ id: "1", name: "", amount: "", unit: "元" }]
+      }
+    } else {
+      return []
+    }
+  })
+
   const handleInputChange = (field: string, value: string, section?: string) => {
     setFormData(prev => {
-      if (section && prev.type === 'policy') {
+      if (prev.type === 'policy') {
+        // Zoe 保單欄位直接更新
+        return {
+          ...prev,
+          data: {
+            ...prev.data,
+            [field]: value
+          }
+        }
+      } else if (section && prev.type !== 'policy') {
         return {
           ...prev,
           data: {
@@ -138,8 +142,58 @@ export default function MedicalDataEditor({
     })
   }
 
+  // 保障範圍管理函數
+  const handleCoverageChange = (id: string, field: string, value: string) => {
+    setCoverageItems(prev => prev.map(item => 
+      item.id === id ? { ...item, [field]: value } : item
+    ))
+  }
+
+  const addCoverageItem = () => {
+    const newId = (coverageItems.length + 1).toString()
+    setCoverageItems(prev => [...prev, { id: newId, name: "", amount: "", unit: "元" }])
+  }
+
+  const removeCoverageItem = (id: string) => {
+    setCoverageItems(prev => prev.filter(item => item.id !== id))
+  }
+
   const handleSave = () => {
-    onSave?.(formData.data)
+    if (formData.type === 'policy') {
+      // 將Zoe欄位映射回完整的MatchCare結構
+      const zoeData = formData.data
+      const originalData = formData.originalData || {}
+      
+      const mappedData = {
+        ...originalData, // 保留所有原始AI分析資料
+        policyBasicInfo: {
+          ...originalData.policyBasicInfo,
+          insuranceCompany: zoeData.company,
+          policyType: zoeData.policyType,
+          policyName: zoeData.policyName,
+          policyNumber: zoeData.policyNumber,
+          effectiveDate: zoeData.startDate,
+          expiryDate: zoeData.endDate
+        },
+        insuredPersonInfo: {
+          ...originalData.insuredPersonInfo,
+          name: zoeData.insuredPerson
+        },
+        beneficiaryInfo: {
+          ...originalData.beneficiaryInfo,
+          name: zoeData.beneficiary
+        },
+        // 保障範圍資料映射
+        coverageDetails: coverageItems.map(item => ({
+          coverageType: item.name,
+          maxAmount: item.amount,
+          unit: item.unit
+        }))
+      }
+      onSave?.(mappedData)
+    } else {
+      onSave?.(formData.data)
+    }
     setIsEditing(false)
   }
 
@@ -156,10 +210,34 @@ export default function MedicalDataEditor({
         data: certificate.diagnosisInfo || {}
       })
     } else if (policy) {
+      // 重新映射為Zoe欄位結構
+      const policyInfo = policy.policyInfo || {}
       setFormData({
         type: 'policy',
-        data: policy.policyInfo || {}
+        originalData: policyInfo,
+        data: {
+          company: policyInfo.policyBasicInfo?.insuranceCompany || "",
+          policyType: policyInfo.policyBasicInfo?.policyType || "",
+          policyName: policyInfo.policyBasicInfo?.policyName || "",
+          policyNumber: policyInfo.policyBasicInfo?.policyNumber || "",
+          startDate: policyInfo.policyBasicInfo?.effectiveDate || "",
+          endDate: policyInfo.policyBasicInfo?.expiryDate || "",
+          insuredPerson: policyInfo.insuredPersonInfo?.name || "",
+          beneficiary: policyInfo.beneficiaryInfo?.name || "",
+        }
       })
+      // 重設保障範圍
+      const existingCoverage = policyInfo.coverageDetails || []
+      if (existingCoverage.length > 0) {
+        setCoverageItems(existingCoverage.map((item: any, index: number) => ({
+          id: (index + 1).toString(),
+          name: item.coverageType || item.name || "",
+          amount: item.maxAmount || item.amount || "",
+          unit: item.unit || "元"
+        })))
+      } else {
+        setCoverageItems([{ id: "1", name: "", amount: "", unit: "元" }])
+      }
     }
     setIsEditing(false)
     onCancel?.()
@@ -642,7 +720,7 @@ export default function MedicalDataEditor({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-green-600" />
-              <CardTitle className="text-lg">保單詳細資訊</CardTitle>
+              <CardTitle className="text-lg">編輯保單</CardTitle>
             </div>
             {!isEditing ? (
               <Button onClick={() => setIsEditing(true)} variant="outline" size="sm" className="gap-2">
@@ -664,286 +742,257 @@ export default function MedicalDataEditor({
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* 保單基本資料 */}
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-900">保單基本資料</h4>
+          {/* 基本資訊 */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">基本資訊</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>保險公司名稱</Label>
+                <Label htmlFor="company">保險公司</Label>
                 {isEditing ? (
-                  <Input
-                    value={policyData.policyBasicInfo?.insuranceCompany || ""}
-                    onChange={(e) => handleInputChange('insuranceCompany', e.target.value, 'policyBasicInfo')}
-                    placeholder="保險公司名稱"
-                  />
+                  <Select value={policyData.company || ""} onValueChange={(value) => handleInputChange('company', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="選擇保險公司" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="國泰人壽">國泰人壽</SelectItem>
+                      <SelectItem value="富邦人壽">富邦人壽</SelectItem>
+                      <SelectItem value="新光人壽">新光人壽</SelectItem>
+                      <SelectItem value="南山人壽">南山人壽</SelectItem>
+                      <SelectItem value="中國人壽">中國人壽</SelectItem>
+                      <SelectItem value="台灣人壽">台灣人壽</SelectItem>
+                    </SelectContent>
+                  </Select>
                 ) : (
                   <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.policyBasicInfo?.insuranceCompany || "待輸入"}
+                    {policyData.company || "待輸入"}
                   </div>
                 )}
               </div>
               <div>
-                <Label>保單號碼</Label>
+                <Label htmlFor="policyType">保單類型</Label>
                 {isEditing ? (
-                  <Input
-                    value={policyData.policyBasicInfo?.policyNumber || ""}
-                    onChange={(e) => handleInputChange('policyNumber', e.target.value, 'policyBasicInfo')}
-                    placeholder="保單號碼"
-                  />
+                  <Select value={policyData.policyType || ""} onValueChange={(value) => handleInputChange('policyType', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="選擇保單類型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="醫療險">醫療保險</SelectItem>
+                      <SelectItem value="壽險">壽險</SelectItem>
+                      <SelectItem value="意外險">意外險</SelectItem>
+                      <SelectItem value="癌症險">癌症險</SelectItem>
+                      <SelectItem value="失能險">失能險</SelectItem>
+                      <SelectItem value="重疾險">重大疾病險</SelectItem>
+                    </SelectContent>
+                  </Select>
                 ) : (
                   <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.policyBasicInfo?.policyNumber || "待輸入"}
+                    {policyData.policyType || "待輸入"}
                   </div>
                 )}
               </div>
-              <div>
-                <Label>保單生效日期</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.policyBasicInfo?.effectiveDate || ""}
-                    onChange={(e) => handleInputChange('effectiveDate', e.target.value, 'policyBasicInfo')}
-                    placeholder="YYYY/MM/DD"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.policyBasicInfo?.effectiveDate || "待輸入"}
-                  </div>
-                )}
-              </div>
-              <div>
-                <Label>保險期間</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.policyBasicInfo?.insurancePeriod || ""}
-                    onChange={(e) => handleInputChange('insurancePeriod', e.target.value, 'policyBasicInfo')}
-                    placeholder="保險契約有效期限"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.policyBasicInfo?.insurancePeriod || "待輸入"}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div>
-              <Label>保單條款</Label>
-              {isEditing ? (
-                <Textarea
-                  value={policyData.policyBasicInfo?.policyTerms || ""}
-                  onChange={(e) => handleInputChange('policyTerms', e.target.value, 'policyBasicInfo')}
-                  placeholder="保險責任、除外責任、理賠條件等"
-                  className="min-h-[80px]"
-                />
-              ) : (
-                <div className="p-3 bg-gray-50 rounded-md text-sm">
-                  {policyData.policyBasicInfo?.policyTerms || "待輸入"}
-                </div>
-              )}
             </div>
           </div>
 
-          <Separator />
-
-          {/* 要保人資料 */}
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-900">要保人資料</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>姓名</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.policyHolderInfo?.name || ""}
-                    onChange={(e) => handleInputChange('name', e.target.value, 'policyHolderInfo')}
-                    placeholder="要保人姓名"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.policyHolderInfo?.name || "待輸入"}
-                  </div>
-                )}
-              </div>
-              <div>
-                <Label>出生年月日</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.policyHolderInfo?.birthDate || ""}
-                    onChange={(e) => handleInputChange('birthDate', e.target.value, 'policyHolderInfo')}
-                    placeholder="YYYY/MM/DD"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.policyHolderInfo?.birthDate || "待輸入"}
-                  </div>
-                )}
-              </div>
-              <div>
-                <Label>身分證字號</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.policyHolderInfo?.idNumber || ""}
-                    onChange={(e) => handleInputChange('idNumber', e.target.value, 'policyHolderInfo')}
-                    placeholder="身分證字號"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.policyHolderInfo?.idNumber || "待輸入"}
-                  </div>
-                )}
-              </div>
-              <div>
-                <Label>職業</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.policyHolderInfo?.occupation || ""}
-                    onChange={(e) => handleInputChange('occupation', e.target.value, 'policyHolderInfo')}
-                    placeholder="職業"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.policyHolderInfo?.occupation || "待輸入"}
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>聯絡地址</Label>
+              <Label htmlFor="policyName">保單名稱</Label>
               {isEditing ? (
                 <Input
-                  value={policyData.policyHolderInfo?.contactAddress || ""}
-                  onChange={(e) => handleInputChange('contactAddress', e.target.value, 'policyHolderInfo')}
-                  placeholder="聯絡地址"
+                  id="policyName"
+                  placeholder="例：安心醫療保險"
+                  value={policyData.policyName || ""}
+                  onChange={(e) => handleInputChange('policyName', e.target.value)}
                 />
               ) : (
                 <div className="p-2 bg-gray-50 rounded text-sm">
-                  {policyData.policyHolderInfo?.contactAddress || "待輸入"}
+                  {policyData.policyName || "待輸入"}
+                </div>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="policyNumber">保單號碼</Label>
+              {isEditing ? (
+                <Input
+                  id="policyNumber"
+                  placeholder="例：CT-MED-123456"
+                  value={policyData.policyNumber || ""}
+                  onChange={(e) => handleInputChange('policyNumber', e.target.value)}
+                />
+              ) : (
+                <div className="p-2 bg-gray-50 rounded text-sm">
+                  {policyData.policyNumber || "待輸入"}
                 </div>
               )}
             </div>
           </div>
 
-          <Separator />
-
-          {/* 被保險人資料 */}
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-900">被保險人資料</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label>姓名</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="startDate">保障開始日期</Label>
+              <div className="relative">
                 {isEditing ? (
                   <Input
-                    value={policyData.insuredPersonInfo?.name || ""}
-                    onChange={(e) => handleInputChange('name', e.target.value, 'insuredPersonInfo')}
-                    placeholder="被保險人姓名"
+                    id="startDate"
+                    type="date"
+                    value={policyData.startDate || ""}
+                    onChange={(e) => handleInputChange('startDate', e.target.value)}
                   />
                 ) : (
                   <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.insuredPersonInfo?.name || "待輸入"}
+                    {policyData.startDate || "待輸入"}
                   </div>
                 )}
-              </div>
-              <div>
-                <Label>出生年月日</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.insuredPersonInfo?.birthDate || ""}
-                    onChange={(e) => handleInputChange('birthDate', e.target.value, 'insuredPersonInfo')}
-                    placeholder="YYYY/MM/DD"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.insuredPersonInfo?.birthDate || "待輸入"}
-                  </div>
-                )}
-              </div>
-              <div>
-                <Label>性別</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.insuredPersonInfo?.gender || ""}
-                    onChange={(e) => handleInputChange('gender', e.target.value, 'insuredPersonInfo')}
-                    placeholder="男/女"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.insuredPersonInfo?.gender || "待輸入"}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* 保險內容與費用資料 */}
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-900">保險內容與費用資料</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>保險金額</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.insuranceContentAndFees?.insuranceAmount || ""}
-                    onChange={(e) => handleInputChange('insuranceAmount', e.target.value, 'insuranceContentAndFees')}
-                    placeholder="保險事故發生時的給付金額"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.insuranceContentAndFees?.insuranceAmount || "待輸入"}
-                  </div>
-                )}
-              </div>
-              <div>
-                <Label>繳費方式</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.insuranceContentAndFees?.paymentMethod || ""}
-                    onChange={(e) => handleInputChange('paymentMethod', e.target.value, 'insuranceContentAndFees')}
-                    placeholder="月繳、季繳、年繳"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.insuranceContentAndFees?.paymentMethod || "待輸入"}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* 保險公司服務資訊 */}
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-900">保險公司服務資訊</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>客服專線</Label>
-                {isEditing ? (
-                  <Input
-                    value={policyData.insuranceServiceInfo?.customerServiceHotline || ""}
-                    onChange={(e) => handleInputChange('customerServiceHotline', e.target.value, 'insuranceServiceInfo')}
-                    placeholder="客服專線電話"
-                  />
-                ) : (
-                  <div className="p-2 bg-gray-50 rounded text-sm">
-                    {policyData.insuranceServiceInfo?.customerServiceHotline || "待輸入"}
-                  </div>
-                )}
+                {isEditing && <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />}
               </div>
             </div>
             <div>
-              <Label>理賠流程簡介</Label>
-              {isEditing ? (
-                <Textarea
-                  value={policyData.insuranceServiceInfo?.claimsProcessIntro || ""}
-                  onChange={(e) => handleInputChange('claimsProcessIntro', e.target.value, 'insuranceServiceInfo')}
-                  placeholder="理賠流程說明"
-                  className="min-h-[60px]"
-                />
-              ) : (
-                <div className="p-3 bg-gray-50 rounded-md text-sm">
-                  {policyData.insuranceServiceInfo?.claimsProcessIntro || "待輸入"}
+              <Label htmlFor="endDate">保障結束日期</Label>
+              <div className="relative">
+                {isEditing ? (
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={policyData.endDate || ""}
+                    onChange={(e) => handleInputChange('endDate', e.target.value)}
+                  />
+                ) : (
+                  <div className="p-2 bg-gray-50 rounded text-sm">
+                    {policyData.endDate || "待輸入"}
+                  </div>
+                )}
+                {isEditing && <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />}
+              </div>
+            </div>
+          </div>
+
+          {/* 保障範圍 */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">保障範圍</h3>
+            <div className="space-y-4">
+              {coverageItems.map((item) => (
+                <div key={item.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 border rounded-lg">
+                  <div>
+                    <Label htmlFor={`coverage-name-${item.id}`}>項目名稱</Label>
+                    {isEditing ? (
+                      <Input
+                        id={`coverage-name-${item.id}`}
+                        placeholder="例：住院醫療"
+                        value={item.name}
+                        onChange={(e) => handleCoverageChange(item.id, "name", e.target.value)}
+                      />
+                    ) : (
+                      <div className="p-2 bg-gray-50 rounded text-sm">
+                        {item.name || "待輸入"}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor={`coverage-amount-${item.id}`}>金額</Label>
+                    {isEditing ? (
+                      <Input
+                        id={`coverage-amount-${item.id}`}
+                        placeholder="例：3000"
+                        value={item.amount}
+                        onChange={(e) => handleCoverageChange(item.id, "amount", e.target.value)}
+                      />
+                    ) : (
+                      <div className="p-2 bg-gray-50 rounded text-sm">
+                        {item.amount || "待輸入"}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor={`coverage-unit-${item.id}`}>單位</Label>
+                    {isEditing ? (
+                      <Select
+                        value={item.unit}
+                        onValueChange={(value) => handleCoverageChange(item.id, "unit", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="元">元</SelectItem>
+                          <SelectItem value="元/日">元/日</SelectItem>
+                          <SelectItem value="元/次">元/次</SelectItem>
+                          <SelectItem value="元/年">元/年</SelectItem>
+                          <SelectItem value="萬元">萬元</SelectItem>
+                          <SelectItem value="倍">倍</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="p-2 bg-gray-50 rounded text-sm">
+                        {item.unit || "元"}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-end">
+                    {isEditing && coverageItems.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeCoverageItem(item.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 bg-transparent"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
+              ))}
+
+              {isEditing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addCoverageItem}
+                  className="w-full gap-2 bg-transparent"
+                >
+                  <Plus className="h-4 w-4" />
+                  新增保障項目
+                </Button>
               )}
+            </div>
+          </div>
+
+          {/* 其他資訊 */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">其他資訊</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="insuredPerson">被保險人</Label>
+                {isEditing ? (
+                  <Input
+                    id="insuredPerson"
+                    placeholder="例：王小明"
+                    value={policyData.insuredPerson || ""}
+                    onChange={(e) => handleInputChange('insuredPerson', e.target.value)}
+                  />
+                ) : (
+                  <div className="p-2 bg-gray-50 rounded text-sm">
+                    {policyData.insuredPerson || "待輸入"}
+                  </div>
+                )}
+              </div>
+              <div>
+                <Label htmlFor="beneficiary">受益人</Label>
+                {isEditing ? (
+                  <Input
+                    id="beneficiary"
+                    placeholder="例：王太明"
+                    value={policyData.beneficiary || ""}
+                    onChange={(e) => handleInputChange('beneficiary', e.target.value)}
+                  />
+                ) : (
+                  <div className="p-2 bg-gray-50 rounded text-sm">
+                    {policyData.beneficiary || "待輸入"}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </CardContent>
