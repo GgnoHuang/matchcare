@@ -427,13 +427,11 @@ export default function InsurancePage() {
                         檢查理賠資格
                       </Button>
                     </Link>
-                    {policy.matchedRecords > 0 && (
-                      <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
-                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
-                          申請理賠
-                        </Button>
-                      </Link>
-                    )}
+                    <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
+                      <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
+                        申請理賠
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               </CardFooter>
@@ -548,13 +546,11 @@ export default function InsurancePage() {
                           檢查理賠資格
                         </Button>
                       </Link>
-                      {policy.matchedRecords > 0 && (
-                        <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
-                          <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
-                            申請理賠
-                          </Button>
-                        </Link>
-                      )}
+                      <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
+                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
+                          申請理賠
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                 </CardFooter>
@@ -664,13 +660,11 @@ export default function InsurancePage() {
                           檢查理賠資格
                         </Button>
                       </Link>
-                      {policy.matchedRecords > 0 && (
-                        <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
-                          <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
-                            申請理賠
-                          </Button>
-                        </Link>
-                      )}
+                      <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
+                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
+                          申請理賠
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                 </CardFooter>
@@ -780,13 +774,11 @@ export default function InsurancePage() {
                           檢查理賠資格
                         </Button>
                       </Link>
-                      {policy.matchedRecords > 0 && (
-                        <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
-                          <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
-                            申請理賠
-                          </Button>
-                        </Link>
-                      )}
+                      <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
+                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
+                          申請理賠
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                 </CardFooter>
