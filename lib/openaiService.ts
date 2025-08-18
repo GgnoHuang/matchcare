@@ -443,25 +443,47 @@ ${policyImageBase64 ? '請仔細分析保單圖片中的所有條款內容，包
   }
 
   /**
-   * 解析 JSON 回應
+   * 解析 JSON 回應（支援 markdown 代碼塊格式）
    */
   private parseJSONResponse(content: string): any {
     try {
-      // 提取 JSON 部分
+      console.log('🔍 原始回應內容:', content.substring(0, 500) + '...');
+      
+      // 方法1: 嘗試提取 markdown 代碼塊中的 JSON
+      const markdownJsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+      if (markdownJsonMatch) {
+        const jsonString = markdownJsonMatch[1].trim();
+        const parsed = JSON.parse(jsonString);
+        console.log('✅ Markdown JSON 解析成功:', parsed);
+        return parsed;
+      }
+      
+      // 方法2: 嘗試提取普通的 JSON 對象
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        console.log('✅ JSON 解析成功:', parsed);
+        console.log('✅ 普通 JSON 解析成功:', parsed);
         return parsed;
       }
+      
+      // 方法3: 嘗試提取任何代碼塊
+      const codeBlockMatch = content.match(/```[\s\S]*?([\s\S]*?)\s*```/);
+      if (codeBlockMatch) {
+        const codeContent = codeBlockMatch[1].trim();
+        // 檢查是否為 JSON
+        if (codeContent.startsWith('{') && codeContent.endsWith('}')) {
+          const parsed = JSON.parse(codeContent);
+          console.log('✅ 代碼塊 JSON 解析成功:', parsed);
+          return parsed;
+        }
+      }
+      
       console.error('❌ 無法找到有效的 JSON 回應，原始內容:', content);
       throw new Error('無法找到有效的 JSON 回應');
     } catch (error) {
       console.error('❌ JSON 解析失敗:', error);
       console.error('原始回應內容:', content);
-      
-      // 返回空對象，讓調用方處理
-      return {};
+      throw error;
     }
   }
 
@@ -1215,56 +1237,358 @@ ${policyText}
   /**
    * 使用AI搜尋網路醫療資源
    */
-  async searchMedicalResources(searchTerm: string): Promise<{
+  /**
+   * 第一階段：醫療費用精準分析
+   */
+  async analyzeMedicalCosts(searchTerm: string): Promise<{
     estimatedCost: string;
     costSource: string;
-    resources: any[];
+    costBreakdown: any;
   }> {
-    const prompt = `請搜尋關於「${searchTerm}」的以下資訊：
+    const prompt = `你是台灣醫療費用分析專家，請針對「${searchTerm}」提供精準的費用分析。
 
-1. 在台灣的平均醫療費用
-2. 政府補助資源（如健保給付、特殊補助）
-3. 公益基金會或慈善機構的協助
-4. 醫療貸款或分期付款方案
-5. 企業社會責任相關資源
+## 🎯 分析要求
+1. **識別醫療項目類型**：手術/治療/檢查/藥物/器材等
+2. **區分自費與健保項目**：明確標示哪些健保有給付
+3. **提供費用區間**：最低-最高費用範圍
+4. **考慮台灣醫療現況**：健保制度、醫學中心與地區醫院差異
 
-請以JSON格式回傳最新資訊：
+## ⚠️ 重要原則
+- 只提供確實存在的醫療項目資訊
+- 費用必須基於台灣醫療市場實況
+- 區分「健保給付」與「自費」部分
+- 如果是非醫療項目，請明確說明
+
+## 📊 回傳格式
 {
-  "estimatedCost": "費用範圍",
-  "costDescription": "費用說明",
-  "costSource": "費用來源",
-  "resources": [
-    {
-      "title": "資源名稱",
-      "organization": "機構名稱", 
-      "category": "政府補助/公益資源/金融產品/企業福利",
-      "subcategory": "具體分類",
-      "eligibility": "申請資格",
-      "amount": "補助/貸款金額",
-      "deadline": "申請期限",
-      "details": "詳細說明",
-      "priority": "high/medium/low",
-      "status": "eligible/conditional",
-      "contactInfo": "聯絡方式或網址"
-    }
-  ]
-}`;
+  "isValidMedicalTerm": true/false,
+  "medicalCategory": "手術/治療/檢查/藥物/復健/其他",
+  "estimatedCost": "完整費用範圍描述",
+  "costSource": "費用來源說明",
+  "costBreakdown": {
+    "healthInsuranceCovered": "健保給付部分",
+    "selfPaidPortion": "自費部分",
+    "totalRange": "總費用範圍",
+    "factors": ["影響費用的因素列表"]
+  },
+  "explanation": "詳細說明"
+}
+
+請確保資訊準確且實用。如果搜尋詞不是醫療相關，請在isValidMedicalTerm中標註false。`;
 
     try {
       const response = await this.callAPI(prompt, 'gpt-4o');
       const result = this.parseJSONResponse(response.content);
       
       return {
-        estimatedCost: result.estimatedCost || '費用資訊查詢中',
-        costSource: result.costSource || 'AI搜尋結果',
-        resources: this.formatNetworkResources(result.resources || [])
+        estimatedCost: result.estimatedCost || '費用資訊分析中',
+        costSource: result.costSource || 'AI醫療費用分析',
+        costBreakdown: result.costBreakdown || {}
       };
     } catch (error) {
-      console.error('網路醫療資源搜尋失敗:', error);
+      console.error('醫療費用分析失敗:', error);
+      return {
+        estimatedCost: '無法取得費用資訊',
+        costSource: '分析失敗',
+        costBreakdown: {}
+      };
+    }
+  }
+
+  /**
+   * 網路搜尋和爬蟲功能
+   */
+  async searchWebResources(searchTerm: string, category: string): Promise<any[]> {
+    const prompt = `你是台灣網路資源搜尋專家，請針對「${searchTerm}」在${category}領域進行網路搜尋分析。
+
+## 🎯 搜尋任務
+請模擬在台灣網路上搜尋「${searchTerm}」相關的${category}資源，並提供具體的網站連結和頁面資訊。
+
+## 📋 搜尋策略
+1. **主要機構官網**：政府機關、銀行、保險公司、基金會等官方網站的相關頁面
+2. **專案頁面**：具體的產品介紹、申請頁面、服務說明
+3. **資訊頁面**：常見問題、申請流程、費率說明等
+4. **新聞報導**：相關的新聞報導或政策說明
+
+## ⚠️ 重要要求
+- 提供真實存在的台灣網站URL，避免編造連結
+- 每個連結都要有明確的標題和說明
+- 優先提供官方權威來源
+- 包含具體的頁面路徑，不只是首頁
+
+## 📊 回傳格式
+{
+  "webResources": [
+    {
+      "title": "具體頁面標題",
+      "url": "完整網址（如：https://www.bot.com.tw/tw/credit-loan/medical-loan）",
+      "description": "頁面內容描述",
+      "organization": "網站所屬機構",
+      "category": "${category}",
+      "relevanceScore": "high/medium/low",
+      "pageType": "官方頁面/產品介紹/申請頁面/新聞報導",
+      "lastUpdated": "預估更新時間",
+      "keyInfo": ["重點資訊1", "重點資訊2", "重點資訊3"]
+    }
+  ]
+}
+
+請確保所有URL都是真實可訪問的台灣網站連結。`;
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o-mini');
+      const result = this.parseJSONResponse(response.content);
+      return result.webResources || [];
+    } catch (error) {
+      console.error('網路資源搜尋失敗:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 第二階段：政府資源精準搜尋
+   */
+  async searchGovernmentResources(searchTerm: string, costInfo: any): Promise<any[]> {
+    const prompt = `你是台灣政府醫療資源專家。針對「${searchTerm}」，請基於你的知識庫提供相關的政府補助資源。
+
+## ⚠️ 重要原則
+- 只提供你確實知道存在的具體政府資源
+- 如果不確定具體機構名稱，請使用「建議洽詢相關單位」
+- 不要編造「某醫院」、「某機構」等模糊名稱
+- 優先提供大框架的補助類型和方向指引
+
+## 🎯 搜尋重點
+1. **健保制度框架**：是否有健保給付、特材給付
+2. **已知的重大補助**：重大傷病、罕見疾病等
+3. **申請方向指引**：應該向哪類機關申請
+4. **一般性補助資訊**：縣市政府常見的醫療補助
+
+## 📋 回傳格式
+{
+  "resources": [
+    {
+      "title": "補助名稱（如：健保重大傷病給付）",
+      "organization": "確定的機關名稱（如：衛生福利部中央健康保險署）或「建議洽詢相關單位」",
+      "category": "政府補助",
+      "subcategory": "中央/地方/健保",
+      "eligibility": "一般性申請條件說明",
+      "amount": "已知的補助範圍或「依個案評估」",
+      "deadline": "常年受理或「請洽詢主管機關」",
+      "details": "補助內容說明，明確標示哪些是推測性資訊",
+      "priority": "high/medium/low",
+      "status": "eligible/conditional",
+      "applicationProcess": "一般性申請指引",
+      "contactInfo": "1957福利諮詢專線或具體已知的聯絡方式",
+      "website": "已知的官方網址或建議搜尋關鍵字"
+    }
+  ]
+}
+
+範例回應思維：
+- ✅ 好：「健保重大傷病給付」「衛生福利部」
+- ❌ 避免：「某大型醫院提供的補助」「某基金會」
+- ✅ 好：「建議洽詢戶籍地縣市政府社會局」
+- ❌ 避免：「某縣市政府提供」
+
+如果找不到相關政府資源，請回傳空陣列。`;
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o-mini');
+      const result = this.parseJSONResponse(response.content);
+      return this.formatNetworkResources(result.resources || [], 'government');
+    } catch (error) {
+      console.error('政府資源搜尋失敗:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 第三階段：金融產品精準搜尋
+   */
+  async searchFinancialProducts(searchTerm: string, costInfo: any): Promise<any[]> {
+    const prompt = `你是台灣醫療金融產品專家，請針對「${searchTerm}」搜尋台灣當地的金融解決方案。
+
+⚠️ 重要提醒：請提供真實存在的台灣金融機構名稱，避免使用「某銀行」、「某保險公司」等通用稱呼。如果不確定具體機構名稱，請誠實說明「需進一步查詢」。
+
+## 🎯 搜尋範圍
+1. **醫療貸款**：台灣銀行、第一銀行、中國信託等醫療專案貸款
+2. **信用卡分期**：各大銀行信用卡醫療分期付款方案
+3. **保險理賠**：國泰人壽、富邦人壽、新光人壽等醫療險理賠
+4. **群眾募資**：嘖嘖、flyingV等台灣募資平台
+5. **企業福利**：台積電、鴻海等大型企業員工醫療福利
+
+## 💰 費用考量
+預估醫療費用：${costInfo?.estimatedCost || '未知'}
+請根據此費用範圍推薦適合的金融產品。
+
+## 📋 回傳格式
+{
+  "resources": [
+    {
+      "title": "金融產品名稱",
+      "organization": "具體金融機構名稱（如：國泰世華銀行、富邦人壽等）",
+      "category": "金融產品",
+      "subcategory": "貸款/分期/保險/募資",
+      "eligibility": "申請條件",
+      "amount": "額度或理賠金額",
+      "deadline": "申請時限",
+      "details": "產品詳情和利率條件",
+      "priority": "high/medium/low",
+      "status": "eligible/conditional",
+      "applicationProcess": "申請流程",
+      "contactInfo": "聯絡方式",
+      "website": "官方網址"
+    }
+  ]
+}
+
+只提供真實存在的金融產品，如果找不到相關產品請回傳空陣列。`;
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o-mini');
+      const result = this.parseJSONResponse(response.content);
+      return this.formatNetworkResources(result.resources || [], 'financial');
+    } catch (error) {
+      console.error('金融產品搜尋失敗:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 第四階段：公益慈善資源搜尋
+   */
+  async searchCharityResources(searchTerm: string, costInfo: any): Promise<any[]> {
+    const prompt = `你是台灣公益慈善資源專家，請針對「${searchTerm}」搜尋台灣本地的慈善協助。
+
+⚠️ 重要提醒：請提供真實存在的台灣慈善機構名稱，避免使用「某基金會」、「某慈善機構」等通用稱呼。如果不確定具體機構名稱，請誠實說明「需進一步查詢」。
+
+## 🎯 搜尋範圍
+1. **醫療基金會**：癌症希望基金會、中華民國兒童癌症基金會、罕見疾病基金會等
+2. **宗教慈善**：佛光山慈悲基金會、天主教善牧基金會、基督教門諾基金會等
+3. **企業CSR**：台積電慈善基金會、富邦慈善基金會、長庚醫療財團法人等
+4. **國際組織**：台灣世界展望會、家扶基金會等
+5. **病友團體**：各疾病病友協會、支持團體
+
+## 📋 回傳格式
+{
+  "resources": [
+    {
+      "title": "慈善資源名稱",
+      "organization": "具體慈善機構名稱（如：癌症希望基金會、罕見疾病基金會等）",
+      "category": "公益資源",
+      "subcategory": "基金會/宗教/企業/國際",
+      "eligibility": "協助對象",
+      "amount": "協助金額或範圍",
+      "deadline": "申請期限",
+      "details": "協助內容詳情",
+      "priority": "high/medium/low",
+      "status": "eligible/conditional",
+      "applicationProcess": "申請方式",
+      "contactInfo": "聯絡方式",
+      "website": "官方網址"
+    }
+  ]
+}
+
+只提供確實存在且目前有在運作的慈善資源。`;
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o-mini');
+      const result = this.parseJSONResponse(response.content);
+      return this.formatNetworkResources(result.resources || [], 'charity');
+    } catch (error) {
+      console.error('慈善資源搜尋失敗:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 整合的醫療資源搜尋（多階段精準搜尋 + 網路爬蟲）
+   */
+  async searchMedicalResources(searchTerm: string): Promise<{
+    estimatedCost: string;
+    costSource: string;
+    resources: any[];
+    webResources: any[];
+    costBreakdown?: any;
+  }> {
+    console.log(`🔍 開始多階段精準搜尋 + 網路爬蟲: ${searchTerm}`);
+    
+    try {
+      // 第一階段：醫療費用精準分析
+      console.log('📊 第一階段：醫療費用分析');
+      const costAnalysis = await this.analyzeMedicalCosts(searchTerm);
+      
+      // 如果不是醫療相關項目，直接返回
+      if (costAnalysis.costBreakdown?.isValidMedicalTerm === false) {
+        return {
+          estimatedCost: '此項目非醫療相關',
+          costSource: 'AI分析結果',
+          resources: [],
+          webResources: [],
+          costBreakdown: costAnalysis.costBreakdown
+        };
+      }
+
+      // 第二階段：並行執行多個搜尋階段（傳統資源搜尋）
+      console.log('🔄 第二階段：並行搜尋各類資源');
+      const [govResources, financialResources, charityResources] = await Promise.all([
+        this.searchGovernmentResources(searchTerm, costAnalysis),
+        this.searchFinancialProducts(searchTerm, costAnalysis), 
+        this.searchCharityResources(searchTerm, costAnalysis)
+      ]);
+
+      // 第三階段：並行執行網路資源搜尋（使用 Promise.allSettled 處理失敗情況）
+      console.log('🌐 第三階段：並行網路資源搜尋');
+      const webSearchPromises = await Promise.allSettled([
+        this.searchWebResources(searchTerm, '政府補助'),
+        this.searchWebResources(searchTerm, '金融產品'),
+        this.searchWebResources(searchTerm, '公益慈善')
+      ]);
+
+      // 安全地提取成功的結果
+      const govWebResources = webSearchPromises[0].status === 'fulfilled' ? webSearchPromises[0].value : [];
+      const financialWebResources = webSearchPromises[1].status === 'fulfilled' ? webSearchPromises[1].value : [];
+      const charityWebResources = webSearchPromises[2].status === 'fulfilled' ? webSearchPromises[2].value : [];
+
+      // 記錄失敗的搜尋
+      webSearchPromises.forEach((result, index) => {
+        const categories = ['政府補助', '金融產品', '公益慈善'];
+        if (result.status === 'rejected') {
+          console.warn(`⚠️ ${categories[index]}網路搜尋失敗:`, result.reason);
+        }
+      });
+
+      // 整合所有資源
+      const allResources = [
+        ...govResources,
+        ...financialResources, 
+        ...charityResources
+      ];
+
+      const allWebResources = [
+        ...govWebResources,
+        ...financialWebResources,
+        ...charityWebResources
+      ];
+
+      console.log(`✅ 搜尋完成，共找到 ${allResources.length} 項傳統資源，${allWebResources.length} 項網路資源`);
+      
+      return {
+        estimatedCost: costAnalysis.estimatedCost,
+        costSource: costAnalysis.costSource,
+        resources: allResources,
+        webResources: allWebResources,
+        costBreakdown: costAnalysis.costBreakdown
+      };
+      
+    } catch (error) {
+      console.error('❌ 多階段搜尋失敗:', error);
       return {
         estimatedCost: '無法取得費用資訊',
         costSource: '搜尋失敗',
-        resources: []
+        resources: [],
+        webResources: []
       };
     }
   }
@@ -1272,9 +1596,9 @@ ${policyText}
   /**
    * 格式化網路搜尋的資源資料
    */
-  private formatNetworkResources(resources: any[]): any[] {
+  private formatNetworkResources(resources: any[], sourceType?: string): any[] {
     return resources.map((resource, index) => ({
-      id: `network-${Date.now()}-${index}`,
+      id: `${sourceType || 'network'}-${Date.now()}-${index}`,
       category: resource.category || '其他資源',
       subcategory: resource.subcategory || '',
       title: resource.title || '',
@@ -1286,7 +1610,10 @@ ${policyText}
       details: resource.details || '',
       priority: resource.priority || 'medium',
       status: resource.status || 'eligible',
-      contactInfo: resource.contactInfo || ''
+      contactInfo: resource.contactInfo || '',
+      website: resource.website || '',
+      applicationProcess: resource.applicationProcess || '',
+      sourceType: sourceType || 'network'
     }));
   }
 
@@ -1298,14 +1625,17 @@ ${policyText}
     costSource: string;
     personalPolicyResults: any[];
     networkResources: any[];
+    webResources: any[];
     searchTerm: string;
   }> {
-    console.log(`開始綜合搜尋: ${searchTerm}`);
+    console.log(`🚀 開始綜合搜尋（個人保單 + 網路資源 + 爬蟲）: ${searchTerm}`);
     
     // 1. 搜尋個人保單
+    console.log('👤 第一階段：搜尋個人保單匹配');
     const personalPolicyResults = await this.searchPersonalPolicies(searchTerm, userPolicies);
     
-    // 2. 搜尋網路資源
+    // 2. 搜尋網路資源（包含網路爬蟲）
+    console.log('🌐 第二階段：搜尋網路資源 + 爬蟲');
     const networkSearch = await this.searchMedicalResources(searchTerm);
     
     // 3. 決定費用估算來源
@@ -1325,13 +1655,94 @@ ${policyText}
       }
     }
     
+    console.log(`✅ 綜合搜尋完成: 個人保單 ${personalPolicyResults.length} 項, 傳統資源 ${networkSearch.resources.length} 項, 網路連結 ${networkSearch.webResources?.length || 0} 項`);
+    
     return {
       estimatedCost,
       costSource,
       personalPolicyResults,
       networkResources: networkSearch.resources,
+      webResources: networkSearch.webResources || [],
       searchTerm
     };
+  }
+
+  /**
+   * 詳細資源分析（詳情頁面用）
+   */
+  async analyzeResourceDetails(resource: any, searchTerm: string): Promise<{
+    detailedAnalysis: string;
+    applicationStrategy: string;
+    riskAssessment: string;
+    timeline: any[];
+    alternativeOptions: string[];
+  }> {
+    const prompt = `你是台灣醫療資源申請專家，請針對以下資源提供詳細分析：
+
+## 📋 資源資訊
+- **搜尋項目**: ${searchTerm}
+- **資源名稱**: ${resource.title}
+- **機構**: ${resource.organization}
+- **類別**: ${resource.category}
+- **補助金額**: ${resource.amount}
+- **申請資格**: ${resource.eligibility}
+
+## 🎯 請提供以下分析
+
+### 1. 詳細分析
+針對此資源與「${searchTerm}」的相關性、申請可行性、預期成功率進行專業分析。
+
+### 2. 申請策略
+提供具體的申請建議，包括最佳申請時機、文件準備技巧、成功要點。
+
+### 3. 風險評估
+分析可能的申請風險、注意事項、常見拒絕原因。
+
+### 4. 申請時程
+提供詳細的申請時程安排，從準備到核准的各個階段。
+
+### 5. 替代方案
+如果此資源申請失敗，推薦其他可能的替代資源或方案。
+
+## 📊 回傳格式
+{
+  "detailedAnalysis": "詳細分析內容",
+  "applicationStrategy": "申請策略建議",
+  "riskAssessment": "風險評估",
+  "timeline": [
+    {
+      "stage": "階段名稱",
+      "duration": "預估時間",
+      "tasks": ["具體任務列表"],
+      "tips": "階段提醒"
+    }
+  ],
+  "alternativeOptions": ["替代方案列表"]
+}
+
+請提供實用且具體的建議，基於台灣實際的申請流程和經驗。`;
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o');
+      const result = this.parseJSONResponse(response.content);
+      
+      return {
+        detailedAnalysis: result.detailedAnalysis || '',
+        applicationStrategy: result.applicationStrategy || '',
+        riskAssessment: result.riskAssessment || '',
+        timeline: result.timeline || [],
+        alternativeOptions: result.alternativeOptions || []
+      };
+    } catch (error) {
+      console.error('詳細資源分析失敗:', error);
+      return {
+        detailedAnalysis: '無法取得詳細分析',
+        applicationStrategy: '建議諮詢專業人員',
+        riskAssessment: '請仔細評估申請風險',
+        timeline: [],
+        alternativeOptions: []
+      };
+    }
   }
 
   /**

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Shield, Menu, X, User, LogOut } from "lucide-react"
+import { Shield, Menu, X, User, LogOut, Sparkles, FileText } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { checkAuth, logout, quickLogin } from "@/app/actions/auth-service"
 import {
@@ -95,20 +95,32 @@ export function MainNav() {
     }
   }
 
-  // 找到 navItems 數組中的保單管理項目，將其改為 AI保單健檢
-  const navItems = [
+  // 主要功能項目
+  const primaryNavItems = [
+    {
+      href: "/ai-resources",
+      label: "AI保障搜尋",
+      icon: <Sparkles className="h-4 w-4" />,
+      description: "智能匹配保障資源",
+    },
+    {
+      href: "/claims",
+      label: "理賠申請",
+      icon: <FileText className="h-4 w-4" />,
+      description: "快速申請理賠",
+    },
+  ]
+
+  // 次要功能項目
+  const secondaryNavItems = [
     { href: "/", label: "首頁" },
+    { href: "/insurance", label: "保單總覽" },
     { href: "/medical-records", label: "病歷管理" },
-    { href: "/ai-resources", label: "一鍵AI找保障" },
-    { href: "/insurance", label: "保單健檢" },
-    { href: "/claims", label: "理賠申請" },
-    { href: "/my-data", label: "我的資料" },
     { href: "/resources", label: "其他福利資源" },
-    // { href: "/subscription", label: "訂閱方案" }, // 暫時隱藏訂閱方案
   ]
 
   return (
-    <header className="border-b">
+    <header className="border-b bg-white shadow-sm">
       <div className="container flex items-center justify-between py-4">
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center gap-2">
@@ -119,14 +131,64 @@ export function MainNav() {
             </div>
           </Link>
         </div>
-        <nav className="hidden md:flex items-center gap-6">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`text-sm font-medium hover:text-emerald-600 ${isActive(item.href) ? "text-emerald-600" : ""}`}
-            >
-              {item.label}
+
+        {/* 桌面版導航 */}
+        <nav className="hidden lg:flex items-center gap-2">
+          {/* 主要功能 - 突出顯示 */}
+          <div className="flex items-center gap-2 mr-4">
+            {primaryNavItems.map((item) => (
+              <Link key={item.href} href={item.href}>
+                <Button
+                  variant={isActive(item.href) ? "default" : "outline"}
+                  size="sm"
+                  className={`gap-2 font-medium transition-all duration-200 ${
+                    isActive(item.href)
+                      ? "bg-teal-600 hover:bg-teal-700 text-white shadow-md"
+                      : "border-teal-200 text-teal-700 hover:bg-teal-50 hover:border-teal-300 hover:shadow-sm"
+                  }`}
+                >
+                  {item.icon}
+                  {item.label}
+                </Button>
+              </Link>
+            ))}
+          </div>
+
+          {/* 分隔線 */}
+          <div className="h-6 w-px bg-gray-300 mx-2"></div>
+
+          {/* 次要功能 */}
+          <div className="flex items-center gap-4">
+            {secondaryNavItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`text-sm font-medium transition-colors hover:text-teal-600 ${
+                  isActive(item.href) ? "text-teal-600" : "text-gray-600"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </nav>
+
+        {/* 中等螢幕導航 */}
+        <nav className="hidden md:flex lg:hidden items-center gap-4">
+          {primaryNavItems.map((item) => (
+            <Link key={item.href} href={item.href}>
+              <Button
+                variant={isActive(item.href) ? "default" : "outline"}
+                size="sm"
+                className={`gap-2 ${
+                  isActive(item.href)
+                    ? "bg-teal-600 hover:bg-teal-700"
+                    : "border-teal-200 text-teal-700 hover:bg-teal-50"
+                }`}
+              >
+                {item.icon}
+                {item.label}
+              </Button>
             </Link>
           ))}
         </nav>
@@ -148,7 +210,7 @@ export function MainNav() {
               )} */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
+                  <Button variant="outline" size="sm" className="gap-2 bg-transparent">
                     <User className="h-4 w-4" />
                     {user.name}
                   </Button>
@@ -187,27 +249,66 @@ export function MainNav() {
           </Button>
         </div>
       </div>
+      {/* 手機版選單 */}
       {isMenuOpen && (
-        <div className="md:hidden border-t">
+        <div className="md:hidden border-t bg-white">
           <div className="container py-4 space-y-4">
-            <nav className="flex flex-col gap-4">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`text-sm font-medium hover:text-emerald-600 ${
-                    isActive(item.href) ? "text-emerald-600" : ""
-                  }`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-            <div className="flex flex-col gap-2 pt-4 border-t">
+            {/* 主要功能 - 突出顯示 */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">主要功能</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {primaryNavItems.map((item) => (
+                  <Link key={item.href} href={item.href} onClick={() => setIsMenuOpen(false)}>
+                    <div
+                      className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
+                        isActive(item.href)
+                          ? "bg-teal-50 border-teal-200 text-teal-700"
+                          : "bg-gray-50 border-gray-200 hover:bg-teal-50 hover:border-teal-200"
+                      }`}
+                    >
+                      {item.icon}
+                      <div>
+                        <div className="font-medium">{item.label}</div>
+                        <div className="text-xs text-gray-500">{item.description}</div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* 分隔線 */}
+            <div className="border-t"></div>
+
+            {/* 次要功能 */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">其他功能</h3>
+              <nav className="flex flex-col gap-2">
+                {secondaryNavItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`text-sm font-medium py-2 px-3 rounded-md transition-colors ${
+                      isActive(item.href)
+                        ? "text-teal-600 bg-teal-50"
+                        : "text-gray-600 hover:text-teal-600 hover:bg-gray-50"
+                    }`}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </nav>
+            </div>
+
+            {/* 分隔線 */}
+            <div className="border-t"></div>
+
+            {/* 用戶選單 */}
+            <div className="flex flex-col gap-2">
               {user ? (
                 <>
-                  <div className="flex items-center gap-2 py-2">
+                  <div className="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-md">
                     <User className="h-4 w-4 text-gray-500" />
                     <span className="text-sm font-medium">{user.name}</span>
                   </div>
@@ -217,14 +318,11 @@ export function MainNav() {
                   <Button variant="outline" size="sm" onClick={() => router.push("/settings")}>
                     帳號設定
                   </Button>
-                  {/* <Button variant="outline" size="sm" onClick={() => router.push("/settings/subscription")}>
-                    訂閱管理
-                  </Button> */}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleLogout}
-                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    className="text-red-600 border-red-200 hover:bg-red-50 bg-transparent"
                   >
                     <LogOut className="h-4 w-4 mr-2" />
                     登出
@@ -232,10 +330,10 @@ export function MainNav() {
                 </>
               ) : (
                 <>
-                  <Button variant="outline" className="w-full" onClick={handleQuickLogin}>
+                  <Button variant="outline" className="w-full bg-transparent" onClick={handleQuickLogin}>
                     快速體驗登入
                   </Button>
-                  <Button variant="outline" className="w-full" onClick={() => router.push("/login")}>
+                  <Button variant="outline" className="w-full bg-transparent" onClick={() => router.push("/login")}>
                     登入
                   </Button>
                   <Button className="w-full bg-teal-600 hover:bg-teal-700" onClick={() => router.push("/register")}>

@@ -38,6 +38,7 @@ import {
   ExternalLink,
   Key,
   Upload,
+  Globe,
 } from "lucide-react"
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
 import FileSelector, { SelectedFileData } from "@/components/ui/file-selector"
@@ -1308,14 +1309,24 @@ function QuickSearchContent({
         icon: <Search className="h-5 w-5 text-blue-600" />,
         personalPolicyCount: result.personalPolicyResults.length,
         networkResourceCount: result.networkResources.length,
+        webResourceCount: result.webResources?.length || 0,
         matchedResources: [
           ...result.personalPolicyResults,
           ...result.networkResources
-        ]
+        ],
+        webResources: result.webResources || []
       }
 
       setSearchResult(formattedResult)
       setQuickSearchResults([formattedResult])
+      
+      // 將搜尋結果儲存到 sessionStorage，供詳情頁面使用
+      try {
+        sessionStorage.setItem('quickSearchResults', JSON.stringify([formattedResult]))
+        console.log('搜尋結果已儲存到 sessionStorage')
+      } catch (error) {
+        console.error('儲存搜尋結果到 sessionStorage 失敗:', error)
+      }
       
     } catch (error) {
       console.error('搜尋失敗:', error)
@@ -1332,6 +1343,13 @@ function QuickSearchContent({
       }
       setSearchResult(errorResult)
       setQuickSearchResults([errorResult])
+      
+      // 即使是錯誤結果也儲存到 sessionStorage
+      try {
+        sessionStorage.setItem('quickSearchResults', JSON.stringify([errorResult]))
+      } catch (error) {
+        console.error('儲存錯誤結果到 sessionStorage 失敗:', error)
+      }
       
       // 如果是API Key問題，給出更明確的指引
       if (error.message.includes('API 金鑰')) {
@@ -1540,6 +1558,55 @@ function QuickSearchContent({
                     </div>
                   )}
                 </div>
+
+                {/* 網路相關資源 */}
+                {treatment.webResources && Array.isArray(treatment.webResources) && treatment.webResources.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                      <Globe className="h-5 w-5 text-blue-600" />
+                      相關網路資源
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                        {treatment.webResources.length} 個連結
+                      </Badge>
+                    </h3>
+                    <div className="grid gap-3">
+                      {treatment.webResources.filter(webResource => webResource && typeof webResource === 'object').map((webResource, index) => (
+                        <div key={index} className="p-4 rounded-lg border border-blue-200 bg-blue-50/50 hover:bg-blue-50 transition-colors">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <ExternalLink className="h-4 w-4 text-blue-600" />
+                                <h4 className="font-medium text-sm text-blue-900">{webResource.title || '未知標題'}</h4>
+                              </div>
+                              <p className="text-sm text-gray-600 mb-2">{webResource.description || '無描述'}</p>
+                              <div className="flex items-center gap-4 text-xs text-gray-500">
+                                <span>來源: {webResource.organization || webResource.source || '未知來源'}</span>
+                                {webResource.category && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {webResource.category}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            {webResource.url && (
+                              <a 
+                                href={webResource.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="ml-4"
+                              >
+                                <Button size="sm" variant="outline" className="text-xs gap-1 border-blue-200 text-blue-700 hover:bg-blue-50">
+                                  前往查看
+                                  <ExternalLink className="h-3 w-3" />
+                                </Button>
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* 新增「聽聽大家怎麼說」按鈕 - 使用AI搜尋的真實資料 */}
                 <div className="mt-6 flex justify-center">
