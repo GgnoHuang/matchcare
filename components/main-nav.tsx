@@ -116,6 +116,7 @@ export function MainNav() {
     { href: "/", label: "首頁" },
     { href: "/insurance", label: "保單總覽" },
     { href: "/medical-records", label: "病歷管理" },
+    { href: "/my-data", label: "我的資料" },
     { href: "/resources", label: "其他福利資源" },
   ]
 

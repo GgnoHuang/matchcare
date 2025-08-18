@@ -66,6 +66,43 @@ const getStarRating = (score: number): { stars: number; label: string } => {
   return { stars: 1, label: "★☆☆☆☆ 不夠好，僅作補充" };
 }
 
+// 計算平均星數函數
+const calculateAverageStars = (evaluation: PolicyEvaluation): string => {
+  if (!evaluation.sections) return "0.0";
+  
+  const sections = evaluation.sections;
+  let totalStars = 0;
+  let sectionCount = 0;
+  
+  // 計算每個部分的星數 (每部分最多5分，轉換為5星制)
+  if (sections.content) {
+    const sectionStars = (sections.content.score / 5) * 5; // 5分滿分轉為5星
+    totalStars += sectionStars;
+    sectionCount++;
+  }
+  
+  if (sections.pricing) {
+    const sectionStars = (sections.pricing.score / 5) * 5;
+    totalStars += sectionStars;
+    sectionCount++;
+  }
+  
+  if (sections.company) {
+    const sectionStars = (sections.company.score / 5) * 5;
+    totalStars += sectionStars;
+    sectionCount++;
+  }
+  
+  if (sections.flexibility) {
+    const sectionStars = (sections.flexibility.score / 5) * 5;
+    totalStars += sectionStars;
+    sectionCount++;
+  }
+  
+  const averageStars = sectionCount > 0 ? totalStars / sectionCount : 0;
+  return averageStars.toFixed(1);
+}
+
 export default function InsurancePolicyDetailPage({ params }: { params: { id: string } }) {
   const [policy, setPolicy] = useState<any>(null)
   const [evaluation, setEvaluation] = useState<PolicyEvaluation | null>(null)
@@ -475,7 +512,7 @@ ${fullPolicyData}
                     <h3 className="font-medium text-lg">綜合評價</h3>
                     <div className="flex items-center gap-2">
                       <StarRating rating={evaluation.starRating} />
-                      <span className="font-bold text-lg">{evaluation.totalScore}/20</span>
+                      <span className="font-bold text-lg">{calculateAverageStars(evaluation)}/5 ⭐</span>
                     </div>
                   </div>
                   <div className="mb-4">
