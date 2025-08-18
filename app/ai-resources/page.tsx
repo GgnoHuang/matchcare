@@ -1588,7 +1588,7 @@ function QuickSearchContent({
                                 )}
                               </div>
                             </div>
-                            {webResource.url && (
+                            {webResource.url ? (
                               <a 
                                 href={webResource.url} 
                                 target="_blank" 
@@ -1600,7 +1600,19 @@ function QuickSearchContent({
                                   <ExternalLink className="h-3 w-3" />
                                 </Button>
                               </a>
-                            )}
+                            ) : webResource.isSuggestion ? (
+                              <div className="ml-4 text-xs text-gray-500">
+                                <div className="font-medium mb-1">🔍 搜尋建議</div>
+                                {webResource.searchKeywords && (
+                                  <div className="text-blue-600 font-mono text-xs bg-blue-50 px-2 py-1 rounded">
+                                    {webResource.searchKeywords}
+                                  </div>
+                                )}
+                                <div className="mt-1 text-xs text-gray-500">
+                                  {webResource.suggestedAction}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       ))}

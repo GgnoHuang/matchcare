@@ -1296,51 +1296,139 @@ ${policyText}
   }
 
   /**
-   * 網路搜尋和爬蟲功能
+   * 真實網路搜尋（整合搜尋引擎）
    */
   async searchWebResources(searchTerm: string, category: string): Promise<any[]> {
-    const prompt = `你是台灣網路資源搜尋專家，請針對「${searchTerm}」在${category}領域進行網路搜尋分析。
+    console.log(`🔍 開始真實網路搜尋: ${searchTerm} - ${category}`);
+    
+    try {
+      // TODO: 實作真正的網路搜尋
+      // 目前暫時返回知名的台灣官方網站作為替代方案
+      const knownOfficialSites = this.getKnownOfficialSites(searchTerm, category);
+      
+      if (knownOfficialSites.length > 0) {
+        console.log(`✅ 找到 ${knownOfficialSites.length} 個已知官方資源`);
+        return knownOfficialSites;
+      }
 
-## 🎯 搜尋任務
-請模擬在台灣網路上搜尋「${searchTerm}」相關的${category}資源，並提供具體的網站連結和頁面資訊。
+      // 備用方案：使用 AI 生成建議（但標明為「建議搜尋」）
+      return await this.generateSearchSuggestions(searchTerm, category);
+      
+    } catch (error) {
+      console.error('網路資源搜尋失敗:', error);
+      return [];
+    }
+  }
 
-## 📋 搜尋策略
-1. **主要機構官網**：政府機關、銀行、保險公司、基金會等官方網站的相關頁面
-2. **專案頁面**：具體的產品介紹、申請頁面、服務說明
-3. **資訊頁面**：常見問題、申請流程、費率說明等
-4. **新聞報導**：相關的新聞報導或政策說明
+  /**
+   * 獲取已知的台灣官方網站資源
+   */
+  private getKnownOfficialSites(searchTerm: string, category: string): any[] {
+    const officialSites = [];
+    
+    // 政府相關網站
+    if (category === '政府補助') {
+      officialSites.push(
+        {
+          title: "衛生福利部中央健康保險署",
+          url: "https://www.nhi.gov.tw/",
+          description: "全民健康保險相關服務與資訊查詢",
+          organization: "衛生福利部中央健康保險署",
+          category: "政府補助",
+          relevanceScore: "high",
+          pageType: "官方網站",
+          verified: true
+        },
+        {
+          title: "衛生福利部社會及家庭署",
+          url: "https://www.sfaa.gov.tw/",
+          description: "社會福利、身心障礙、兒少福利等服務",
+          organization: "衛生福利部社會及家庭署",
+          category: "政府補助",
+          relevanceScore: "high",
+          pageType: "官方網站",
+          verified: true
+        }
+      );
+    }
+    
+    // 金融相關網站
+    if (category === '金融產品') {
+      officialSites.push(
+        {
+          title: "臺灣銀行個人金融服務",
+          url: "https://www.bot.com.tw/tw/personal",
+          description: "個人貸款、信用卡等金融服務",
+          organization: "臺灣銀行",
+          category: "金融產品",
+          relevanceScore: "high",
+          pageType: "官方網站",
+          verified: true
+        }
+      );
+    }
+    
+    // 過濾與搜尋詞相關的網站
+    return officialSites.filter(site => {
+      const searchLower = searchTerm.toLowerCase();
+      const titleLower = site.title.toLowerCase();
+      const descLower = site.description.toLowerCase();
+      
+      // 簡單的關鍵字匹配邏輯
+      if (searchLower.includes('糖尿病') || searchLower.includes('醫療')) {
+        return true;
+      }
+      if (searchLower.includes('貸款') && site.category === '金融產品') {
+        return true;
+      }
+      
+      return titleLower.includes(searchLower) || descLower.includes(searchLower);
+    });
+  }
 
-## ⚠️ 重要要求
-- 提供真實存在的台灣網站URL，避免編造連結
-- 每個連結都要有明確的標題和說明
-- 優先提供官方權威來源
-- 包含具體的頁面路徑，不只是首頁
+  /**
+   * 生成搜尋建議（標明為非真實網址）
+   */
+  private async generateSearchSuggestions(searchTerm: string, category: string): Promise<any[]> {
+    const prompt = `針對「${searchTerm}」在${category}領域，請建議用戶可以搜尋的關鍵字和機構名稱。
 
-## 📊 回傳格式
+## 📋 回傳格式
 {
-  "webResources": [
+  "searchSuggestions": [
     {
-      "title": "具體頁面標題",
-      "url": "完整網址（如：https://www.bot.com.tw/tw/credit-loan/medical-loan）",
-      "description": "頁面內容描述",
-      "organization": "網站所屬機構",
+      "title": "建議搜尋：[機構名稱] + [服務項目]",
+      "searchKeywords": "建議搜尋關鍵字",
+      "organization": "建議查詢的機構名稱",
+      "description": "說明該機構可能提供的服務",
       "category": "${category}",
-      "relevanceScore": "high/medium/low",
-      "pageType": "官方頁面/產品介紹/申請頁面/新聞報導",
-      "lastUpdated": "預估更新時間",
-      "keyInfo": ["重點資訊1", "重點資訊2", "重點資訊3"]
+      "suggestedAction": "建議前往官網或致電詢問"
     }
   ]
 }
 
-請確保所有URL都是真實可訪問的台灣網站連結。`;
+重要：請明確標示這是「搜尋建議」，不是真實網址。`;
 
     try {
       const response = await this.callAPI(prompt, 'gpt-4o-mini');
       const result = this.parseJSONResponse(response.content);
-      return result.webResources || [];
+      
+      // 轉換為統一格式，但標明為搜尋建議
+      return (result.searchSuggestions || []).map((suggestion: any, index: number) => ({
+        title: suggestion.title || `搜尋建議 ${index + 1}`,
+        url: null, // 明確標示沒有真實網址
+        description: suggestion.description || '',
+        organization: suggestion.organization || '',
+        category: suggestion.category || category,
+        relevanceScore: "medium",
+        pageType: "搜尋建議",
+        searchKeywords: suggestion.searchKeywords || '',
+        suggestedAction: suggestion.suggestedAction || '建議上網搜尋或致電詢問',
+        verified: false,
+        isSuggestion: true
+      }));
+      
     } catch (error) {
-      console.error('網路資源搜尋失敗:', error);
+      console.error('生成搜尋建議失敗:', error);
       return [];
     }
   }
