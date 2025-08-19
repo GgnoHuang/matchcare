@@ -47,8 +47,8 @@ export class OpenAIService {
   private apiKey: string;
   private baseURL: string = 'https://api.openai.com/v1/chat/completions';
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
+  constructor(apiKey?: string) {
+    this.apiKey = apiKey || localStorage.getItem('openai_api_key') || '';
   }
 
   /**
@@ -647,162 +647,78 @@ ${text ? `輔助文字資料：\n${text}\n` : ''}
   }
 
   /**
-   * 分析保險保單文件
+   * 分析保險保單文件 - 符合 Zoe 專案欄位結構
    */
   async analyzeInsurancePolicy(text: string, imageBase64: string | null = null): Promise<any> {
-    const prompt = `你是資深保險文件OCR分析專家，具備識別各種保險保單格式和條款的專業能力。
+    try {
+      console.log('分析保單文件 - 文字長度:', text.length, '圖片:', imageBase64 ? '有' : '無');
+      
+      // 檢查 API Key
+      if (!this.apiKey) {
+        throw new Error('請先設定 OpenAI API Key');
+      }
+      
+      console.log('API Key 檢查通過');
+      
+      const prompt = `你是資深保險文件分析專家，專門識別保險保單中的關鍵資訊。
 
-${text ? `補充文字資料：\n${text}\n` : ''}
+${text ? `## 📋 文字資料分析
+${text}
+` : ''}
 
-## 📄 保險保單OCR分析任務
+${imageBase64 ? `## 🖼️ 圖片內容分析
+請仔細檢視並分析圖片中的所有保單資訊：
+- 保險公司名稱和標誌
+- 保單類型和名稱
+- 保單號碼和日期
+- 保障內容和金額
+- 被保險人資訊
+- 所有可見的保險條款內容
 
-### 🔎 文件結構分析
-保險保單通常包含以下標準區塊，請逐一識別：
+**重要**：請逐字識別圖片中的文字內容，不要只提供概括描述。
+` : ''}
 
-**文件標頭區**
-- 保險公司完整名稱和標誌
-- **保單正式名稱**（重點識別，如：終身壽險保單、醫療保險保單、重大疾病保險、意外傷害保險等）
-- **保險類型分類**（壽險、醫療險、意外險、重疾險、儲蓄險、投資型保險等）
-- 保單號碼或契約號碼
-- 文件版本或印刷日期
+## 📤 輸出格式
 
-### 🎯 保單名稱識別重點
-請特別注意文件中的以下位置來識別保單名稱：
-- **封面標題**：通常會有完整的保單正式名稱
-- **條款標題**：如「○○終身壽險保單條款」
-- **保障說明**：描述具體保險類型和內容
-- **契約書標頭**：正式的保單契約名稱
-
-常見保單類型參考：
-- 壽險類：終身壽險、定期壽險、儲蓄型壽險
-- 醫療類：住院醫療險、手術險、癌症險、重大疾病險
-- 意外類：意外傷害險、意外醫療險、旅行險
-- 投資類：投資型保險、變額壽險、萬能壽險
-
-**基本契約資訊區**
-- 保險契約生效日期
-- 保險期間或契約期限
-- 繳費期間和繳費方式
-- 保險金額或保障額度
-
-**要保人資料區**
-- 要保人完整姓名
-- 出生日期和年齡
-- 身分證字號
-- 職業類別
-- 聯絡地址和電話
-
-**被保險人資料區**
-- 被保險人完整姓名  
-- 出生日期和性別
-- 身分證字號
-- 職業類別和風險等級
-- 與要保人關係
-
-**受益人資料區**
-- 受益人姓名
-- 與被保險人關係
-- 受益比例或順位
-- 身分證字號（如有）
-
-**保險內容說明區**
-- 主約保障項目和給付條件
-- 附加條款或附約內容
-- 保險金給付方式
-- 紅利分配方式
-
-**重要條款區**
-- 除外責任條款
-- 等待期規定
-- 自動墊繳條款
-- 復效條款
-
-**服務資訊區**
-- 客服電話或聯絡方式
-- 理賠申請程序
-- 保全服務說明
-
-### 💡 OCR識別要點
-- 注意保單號碼的英文字母和數字組合
-- 仔細識別金額數字，注意千分位符號
-- 區分不同類型的日期格式
-- 識別各種印章和簽名的文字內容
-- 留意小字條款和免責聲明
-
-## 📋 輸出結構
-
-請將從圖片中識別到的具體內容填入以下JSON結構：
+請以以下JSON格式輸出，只填入能從文件中實際識別到的資訊：
 
 {
-  "policyBasicInfo": {
-    "insuranceCompany": "從圖片識別的保險公司完整名稱",
-    "policyName": "保單正式名稱（如：終身壽險保單、醫療保險保單、重大疾病保險等）",
-    "policyType": "保險類型（如：壽險、醫療險、意外險、重疾險、儲蓄險等）",
-    "policyNumber": "完整保單號碼或契約號碼",
-    "effectiveDate": "保單生效日期（保持原始格式）",
-    "expiryDate": "保單到期日期（如果有明確標示的話）",
-    "policyTerms": "主要保險條款和保障內容的具體描述",
-    "insurancePeriod": "保險期間的完整表述"
-  },
-  "policyHolderInfo": {
-    "name": "要保人完整姓名",
-    "birthDate": "要保人出生年月日",
-    "idNumber": "要保人身分證字號",
-    "occupation": "要保人職業",
-    "contactAddress": "要保人聯絡地址"
-  },
-  "insuredPersonInfo": {
-    "name": "被保險人完整姓名",
-    "birthDate": "被保險人出生年月日",
-    "gender": "被保險人性別",
-    "idNumber": "被保險人身分證字號",
-    "occupation": "被保險人職業",
-    "contactAddress": "被保險人聯絡地址"
-  },
-  "beneficiaryInfo": {
-    "name": "受益人完整姓名",
-    "relationshipToInsured": "與被保險人的具體關係",
-    "benefitRatio": "受益比例或順位"
-  },
-  "insuranceContentAndFees": {
-    "insuranceAmount": "保險金額的具體數字和幣別",
-    "paymentMethod": "保費繳納方式的完整描述",
-    "paymentPeriod": "繳費期間的具體年限",
-    "dividendDistribution": "紅利分配的具體方式"
-  },
-  "otherMatters": {
-    "automaticPremiumLoan": "自動墊繳相關條款內容",
-    "additionalClauses": "附加條款和附約的具體項目"
-  },
-  "insuranceServiceInfo": {
-    "customerServiceHotline": "客服專線電話號碼",
-    "claimsProcessIntro": "理賠流程的具體說明"
-  }
+  "company": "保險公司名稱",
+  "type": "保單類型",
+  "name": "保單名稱",
+  "number": "保單號碼",
+  "startDate": "YYYY-MM-DD",
+  "endDate": "YYYY-MM-DD",
+  "coverage": [
+    {
+      "name": "保障項目名稱",
+      "amount": "金額數字",
+      "unit": "元/萬元/次/日"
+    }
+  ],
+  "insuredName": "被保險人姓名",
+  "beneficiary": "受益人姓名"
 }
 
-## ✅ 品質確認
-- 確保所有識別內容都是從圖片中實際讀取的文字
-- 保單號碼要完整且格式正確
-- 金額數字要精確，包含正確的數位和單位
-- 日期格式要與原文件保持一致
-- 只有在圖片中確實找不到相關資訊時，才填入"待輸入"
+**重要提醒**
+- 只填入從文件中能清楚識別的資訊
+- 無法識別的欄位請填入空字串 ""
+- 金額請提取純數字，單位另外標註
+- 日期統一使用 YYYY-MM-DD 格式
 
-請開始保險保單OCR分析作業。`;
+請開始分析：`;
 
-    const messages = [
-      { role: 'user', content: prompt }
-    ];
-
-    if (imageBase64) {
-      const imageUrl = this.generateImageUrl(imageBase64);
-      console.log(`圖片分析 - 設定圖片URL: ${imageUrl.substring(0, 50)}...`);
-      (messages[0] as any).content = [
-        { type: 'text', text: prompt },
-        { type: 'image_url', image_url: { url: imageUrl } }
+      const messages = [
+        {
+          role: 'user',
+          content: imageBase64 ? [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: this.generateImageUrl(imageBase64) } }
+          ] : prompt
+        }
       ];
-    }
 
-    try {
+      console.log('發送 API 請求...');
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -816,69 +732,41 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
         }),
       });
 
+      console.log('API 響應狀態:', response.status);
       if (!response.ok) {
-        throw new Error(`OpenAI API 錯誤: ${response.status}`);
+        const errorText = await response.text();
+        console.error('API 錯誤詳情:', errorText);
+        throw new Error(`OpenAI API 錯誤: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('收到 API 響應:', data);
       const content = data.choices?.[0]?.message?.content || '';
+      console.log('AI 回復內容:', content);
       
       // 嘗試解析JSON
       try {
         const jsonMatch = content.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          return JSON.parse(jsonMatch[0]);
+          const parsed = JSON.parse(jsonMatch[0]);
+          console.log('JSON 解析成功:', parsed);
+          return parsed;
         }
       } catch (e) {
-        console.warn('無法解析JSON，返回原始內容');
+        console.warn('無法解析JSON，返回預設結構', e);
       }
       
       // 如果解析失敗，返回預設結構
       return {
-        policyBasicInfo: {
-          insuranceCompany: "待輸入",
-          policyName: "待輸入",
-          policyType: "待輸入",
-          policyNumber: "待輸入",
-          effectiveDate: "待輸入",
-          expiryDate: "待輸入",
-          policyTerms: "待輸入",
-          insurancePeriod: "待輸入"
-        },
-        policyHolderInfo: {
-          name: "待輸入",
-          birthDate: "待輸入",
-          idNumber: "待輸入",
-          occupation: "待輸入",
-          contactAddress: "待輸入"
-        },
-        insuredPersonInfo: {
-          name: "待輸入",
-          birthDate: "待輸入",
-          gender: "待輸入",
-          idNumber: "待輸入",
-          occupation: "待輸入",
-          contactAddress: "待輸入"
-        },
-        beneficiaryInfo: {
-          name: "待輸入",
-          relationshipToInsured: "待輸入",
-          benefitRatio: "待輸入"
-        },
-        insuranceContentAndFees: {
-          insuranceAmount: "待輸入",
-          paymentMethod: "待輸入",
-          paymentPeriod: "待輸入",
-          dividendDistribution: "待輸入"
-        },
-        otherMatters: {
-          automaticPremiumLoan: "待輸入",
-          additionalClauses: "待輸入"
-        },
-        insuranceServiceInfo: {
-          customerServiceHotline: "待輸入",
-          claimsProcessIntro: "待輸入"
-        }
+        company: "",
+        type: "",
+        name: "",
+        number: "",
+        startDate: "",
+        endDate: "",
+        coverage: [],
+        insuredName: "",
+        beneficiary: ""
       };
     } catch (error) {
       console.error('保險保單分析錯誤:', error);
@@ -887,97 +775,71 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
   }
 
   /**
-   * 分析病例記錄文件
+   * 分析病例記錄文件 - 符合 Zoe 專案欄位結構
    */
   async analyzeMedicalRecord(text: string, imageBase64: string | null = null): Promise<any> {
-    const prompt = `你是頂尖的醫療文件OCR專家，擅長精確識別各種醫療文件中的所有文字資訊。請使用專業的醫療文件分析技能。
+    try {
+      console.log('分析醫療記錄文件 - 文字長度:', text.length, '圖片:', imageBase64 ? '有' : '無');
+      
+      // 檢查 API Key
+      if (!this.apiKey) {
+        throw new Error('請先設定 OpenAI API Key');
+      }
+      
+      console.log('API Key 檢查通過');
+      
+      const prompt = `你是資深醫療文件分析專家，專門識別病歷和醫療記錄中的關鍵資訊。
 
-${text ? `補充文字資料：\n${text}\n` : ''}
+${text ? `## 📋 文字資料分析
+${text}
+` : ''}
 
-## 🔍 OCR分析任務
-請仔細檢視圖片，逐一識別以下每個區域的文字：
+${imageBase64 ? `## 🖼️ 圖片內容分析
+請仔細檢視並分析圖片中的所有醫療資訊：
+- 醫院名稱和標誌
+- 科別和醫師資訊
+- 就診日期和診斷內容
+- 檢查項目和結果
+- 治療方案和用藥記錄
+- 所有可見的醫療專業術語
 
-### 1. 醫院標頭區域
-- 醫院完整名稱、科別標示
-- 地址、電話、網址等聯絡資訊
-- 醫院標誌或特殊識別標記
+**重要**：請逐字識別圖片中的文字內容，不要只提供概括描述。
+` : ''}
 
-### 2. 病患身份區域  
-- 完整姓名（注意繁簡體、特殊字元）
-- 出生日期（民國/西元年）
-- 病歷號碼、就診號
-- 性別、年齡資訊
+## 📤 輸出格式
 
-### 3. 就診資訊區域
-- 就診日期和時間
-- 科別和診間號碼
-- 主治醫師姓名
-
-### 4. 病歷內容主體
-- 主訴(Chief Complaint)
-- 現病史(Present Illness) 
-- 過去病史(Past History)
-- 理學檢查結果
-- 診斷內容(含ICD碼)
-- 治療計畫和建議
-
-### 5. 處方藥物區域
-- 藥品名稱（商品名/學名）
-- 藥品劑量和單位
-- 使用方法和頻次
-- 處方天數和總量
-
-### 6. 檢驗檢查數據
-- 各種檢驗報告數值
-- 影像檢查結果描述
-- 異常值標示
-
-### 7. 簽章認證區域
-- 醫師簽名或蓋章
-- 醫院印鑑
-- 開立日期確認
-
-## 📋 輸出格式要求
-
-請將OCR識別的**具體內容**填入JSON，避免使用模糊描述：
+請以以下JSON格式輸出，只填入能從文件中實際識別到的資訊：
 
 {
-  "documentTitle": "病歷文件的正式標題或類型（如：門診病歷、住院病歷、檢查報告、手術記錄等）",
-  "documentType": "文件類型分類（門診記錄/住院記錄/檢查報告/手術記錄/出院病摘）",
-  "medicalSubject": "主要疾病或醫療主題（如：糖尿病門診、心臟手術、健康檢查等）",
-  "clinicalRecord": "完整的臨床記錄文字，包含日期、科別、主訴、診斷、處置等具體內容",
-  "admissionRecord": "入院相關記錄的完整文字內容", 
-  "surgeryRecord": "手術記錄的詳細文字描述",
-  "examinationReport": "檢查檢驗報告的具體數值和結果描述",
-  "medicationRecord": "處方用藥的完整資訊，包含藥名、劑量、用法等",
-  "dischargeSummary": "出院病摘的完整內容",
-  "hospitalStamp": "醫院印章、醫師簽名等認證資訊的文字內容"
+  "hospital": "醫院名稱",
+  "department": "科別",
+  "visitDate": "YYYY-MM-DD",
+  "doctor": "主治醫師",
+  "isFirstOccurrence": "yes/no/unknown",
+  "medicalExam": "醫學檢查項目",
+  "diagnosis": "診斷結果",
+  "treatment": "治療方案",
+  "medication": "用藥記錄"
 }
 
-## ✅ 品質檢查
-- 確保每個有內容的欄位都包含從圖片中實際讀取的文字
-- 日期格式要準確（如：113年3月15日 或 2024/03/15）
-- 藥物資訊要包含完整的劑量和用法
-- 診斷要包含具體的疾病名稱
-- 如果某個欄位在圖片中確實沒有相關內容，才填入"待輸入"
+**重要提醒**
+- 只填入從文件中能清楚識別的資訊
+- 無法識別的欄位請填入空字串 ""
+- 日期統一使用 YYYY-MM-DD 格式
+- 是否首次發病請填 yes/no/unknown
 
-請開始OCR分析並以JSON格式回傳結果。`;
-
-    const messages = [
-      { role: 'user', content: prompt }
-    ];
-
-    if (imageBase64) {
-      const imageUrl = this.generateImageUrl(imageBase64);
-      console.log(`病例分析 - 設定圖片URL: ${imageUrl.substring(0, 50)}...`);
+請開始分析：`;
       
-      (messages[0] as any).content = [
-        { type: 'text', text: prompt },
-        { type: 'image_url', image_url: { url: imageUrl } }
+      const messages = [
+        {
+          role: 'user',
+          content: imageBase64 ? [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: this.generateImageUrl(imageBase64) } }
+          ] : prompt
+        }
       ];
-    }
 
-    try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -1010,19 +872,18 @@ ${text ? `補充文字資料：\n${text}\n` : ''}
       
       // 如果解析失敗，返回預設結構
       return {
-        documentTitle: "待輸入",
-        documentType: "待輸入",
-        medicalSubject: "待輸入",
-        clinicalRecord: "待輸入",
-        admissionRecord: "待輸入",
-        surgeryRecord: "待輸入", 
-        examinationReport: "待輸入",
-        medicationRecord: "待輸入",
-        dischargeSummary: "待輸入",
-        hospitalStamp: "待輸入"
+        hospital: "",
+        department: "",
+        visitDate: "",
+        doctor: "",
+        isFirstOccurrence: "unknown",
+        medicalExam: "",
+        diagnosis: "",
+        treatment: "",
+        medication: ""
       };
     } catch (error) {
-      console.error('病例記錄分析錯誤:', error);
+      console.error('醫療記錄分析錯誤:', error);
       throw error;
     }
   }

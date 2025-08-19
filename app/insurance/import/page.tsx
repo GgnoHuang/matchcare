@@ -1,106 +1,202 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Progress } from "@/components/ui/progress"
-import { FileUp, FileText, ArrowLeft, CheckCircle2, Info, AlertCircle, Loader2, Shield } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, Upload, FileText, CheckCircle2, Info, Calendar, Plus, Trash2 } from 'lucide-react'
+import { OpenAIService } from '@/lib/openaiService'
+import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
+import { userDataService, generateId } from "@/lib/storage"
+import { checkAuth } from "@/app/actions/auth-service"
 
-export default function ImportInsurancePage() {
-  const [file, setFile] = useState<File | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+export default function InsuranceImportPage() {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const [progress, setProgress] = useState(0)
-  const [selectedCompany, setSelectedCompany] = useState<string | null>(null)
-  const [credentials, setCredentials] = useState({
-    username: "",
-    password: "",
+  const [dragActive, setDragActive] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [analysisResult, setAnalysisResult] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
+  
+  // Manual input form state
+  const [formData, setFormData] = useState({
+    company: "",
+    type: "",
+    name: "",
+    number: "",
+    startDate: "",
+    endDate: "",
+    insuredName: "",
+    beneficiary: ""
   })
-  const [isUploaded, setIsUploaded] = useState(false)
 
-  const insuranceCompanies = [
-    { id: "cathay", name: "國泰人壽", logo: "/placeholder.svg?height=60&width=120" },
-    { id: "shin-kong", name: "新光人壽", logo: "/placeholder.svg?height=60&width=120" },
-    { id: "fubon", name: "富邦人壽", logo: "/placeholder.svg?height=60&width=120" },
-    { id: "nanshan", name: "南山人壽", logo: "/placeholder.svg?height=60&width=120" },
-    { id: "global", name: "全球人壽", logo: "/placeholder.svg?height=60&width=120" },
-    { id: "china", name: "中國人壽", logo: "/placeholder.svg?height=60&width=120" },
-  ]
+  const [coverageItems, setCoverageItems] = useState([
+    { name: "", amount: "", unit: "元" }
+  ])
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
-      setUploadError(null)
+  // 檢查用戶登入狀態
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const { isLoggedIn, user: authUser } = await checkAuth()
+        if (isLoggedIn && authUser) {
+          setUser(authUser)
+        }
+      } catch (error) {
+        console.error('獲取用戶資訊失敗:', error)
+      }
+    }
+    fetchUser()
+  }, [])
+
+
+  const handleFileUpload = async (fileData: UploadedFile | null) => {
+    if (!fileData) return
+    
+    setIsProcessing(true)
+    setError(null)
+    
+    try {
+      console.log('開始分析保單文件:', fileData.filename)
+      
+      const openaiService = new OpenAIService()
+      console.log('開始 AI 分析...')
+      const result = await openaiService.analyzeInsurancePolicy(
+        fileData.text || '', 
+        fileData.base64
+      )
+      console.log('AI 分析結果:', result)
+      
+      setAnalysisResult(result)
+      setIsComplete(true)
+    } catch (error) {
+      console.error('Error analyzing policy:', error)
+      const errorMessage = error instanceof Error ? error.message : 'AI 分析失敗，請稍後再試或使用手動輸入'
+      setError(errorMessage)
+    } finally {
+      setIsProcessing(false)
     }
   }
 
-  const handleUpload = () => {
-    if (!file) {
-      setUploadError("請選擇檔案")
-      return
-    }
-
-    setIsUploading(true)
-    setProgress(0)
-
-    // 模擬上傳過程
-    const uploadInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(uploadInterval)
-          setIsUploading(false)
-          setIsProcessing(true)
-
-          // 模擬處理過程
-          setTimeout(() => {
-            setIsProcessing(false)
-            setIsComplete(true)
-          }, 2000)
-
-          return 100
-        }
-        return prev + 10
-      })
-    }, 300)
+  const handleFileError = (errorMessage: string) => {
+    setError(errorMessage)
   }
 
-  const handleConnect = () => {
-    if (!credentials.username || !credentials.password) {
-      setUploadError("請輸入帳號密碼")
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleCoverageChange = (index: number, field: string, value: string) => {
+    setCoverageItems(prev => prev.map((item, i) => 
+      i === index ? { ...item, [field]: value } : item
+    ))
+  }
+
+  const addCoverageItem = () => {
+    setCoverageItems(prev => [...prev, { name: "", amount: "", unit: "元" }])
+  }
+
+  const removeCoverageItem = (index: number) => {
+    setCoverageItems(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSubmit = async () => {
+    if (!user?.id) {
+      setError('請先登入')
       return
     }
 
-    setIsUploading(true)
-    setProgress(0)
-
-    // 模擬連接過程
-    const connectInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(connectInterval)
-          setIsUploading(false)
-          setIsProcessing(true)
-
-          // 模擬處理過程
-          setTimeout(() => {
-            setIsProcessing(false)
-            setIsComplete(true)
-          }, 2000)
-
-          return 100
+    try {
+      // Prepare policy data
+      const policyData = {
+        id: generateId(),
+        fileName: 'manual_input',
+        fileType: 'manual',
+        documentType: 'insurance' as const,
+        uploadDate: new Date().toISOString(),
+        fileSize: 0,
+        textContent: '',
+        imageBase64: null,
+        policyInfo: {
+          policyBasicInfo: {
+            insuranceCompany: formData.company,
+            policyType: formData.type,
+            policyName: formData.name,
+            policyNumber: formData.number,
+            effectiveDate: formData.startDate,
+            expirationDate: formData.endDate,
+            insuredName: formData.insuredName,
+            beneficiary: formData.beneficiary
+          },
+          coverageDetails: {
+            coverage: coverageItems.filter(item => item.name && item.amount)
+          }
         }
-        return prev + 10
-      })
-    }, 300)
+      }
+      
+      // Save using userDataService
+      await userDataService.saveInsurancePolicy(user.id, policyData)
+      
+      // Redirect to insurance page
+      window.location.href = '/insurance'
+    } catch (error) {
+      console.error('Error saving policy:', error)
+      setError('保存失敗，請稍後再試')
+    }
+  }
+  
+  const handleAutoNext = async () => {
+    if (!analysisResult || !user?.id) {
+      setError('請先登入或重新分析')
+      return
+    }
+    
+    try {
+      // Prepare policy data from AI analysis
+      const policyData = {
+        id: generateId(),
+        fileName: 'ai_analyzed',
+        fileType: 'auto',
+        documentType: 'insurance' as const,
+        uploadDate: new Date().toISOString(),
+        fileSize: 0,
+        textContent: '',
+        imageBase64: null,
+        policyInfo: {
+          policyBasicInfo: {
+            insuranceCompany: analysisResult.company || '',
+            policyType: analysisResult.type || '',
+            policyName: analysisResult.name || '',
+            policyNumber: analysisResult.number || '',
+            effectiveDate: analysisResult.startDate || '',
+            expirationDate: analysisResult.endDate || '',
+            insuredName: analysisResult.insuredName || '',
+            beneficiary: analysisResult.beneficiary || ''
+          },
+          coverageDetails: {
+            coverage: analysisResult.coverage || []
+          }
+        }
+      }
+      
+      // Save using userDataService
+      await userDataService.saveInsurancePolicy(user.id, policyData)
+      
+      // Redirect to insurance page
+      window.location.href = '/insurance'
+    } catch (error) {
+      console.error('Error saving analysis result:', error)
+      setError('保存失敗，請稍後再試')
+    }
   }
 
   return (
@@ -109,288 +205,334 @@ export default function ImportInsurancePage() {
         <Link href="/insurance">
           <Button variant="ghost" size="sm" className="gap-1">
             <ArrowLeft className="h-4 w-4" />
-            返回保單管理
+            返回保單總覽
           </Button>
         </Link>
       </div>
 
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">導入保險保單</h1>
-        <p className="text-gray-500 mb-8">從保險公司或手動上傳保單資訊</p>
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold tracking-tight mb-2">添加保單</h1>
+          <p className="text-gray-500">手動添加或上傳您的保險保單資料</p>
+        </div>
 
-        <Tabs defaultValue="api" className="w-full">
-          <TabsList className="mb-4 grid grid-cols-2 w-full max-w-md">
-            <TabsTrigger value="api">保險公司帳號連結</TabsTrigger>
-            <TabsTrigger value="manual">手動上傳</TabsTrigger>
+        <Tabs defaultValue="auto" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-8">
+            <TabsTrigger value="auto">自動辨識</TabsTrigger>
+            <TabsTrigger value="manual">手動輸入</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="api">
+          <TabsContent value="auto" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>連結保險公司帳號</CardTitle>
-                <CardDescription>直接連結您的保險公司帳號，自動導入所有保單資訊</CardDescription>
+                <CardTitle className="text-xl">自動辨識保單</CardTitle>
+                <CardDescription>
+                  上傳保單文件進行自動辨識解析，系統將自動提取保單資訊內容
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {!selectedCompany ? (
-                  <>
-                    <Alert>
-                      <Info className="h-4 w-4" />
-                      <AlertTitle>選擇保險公司</AlertTitle>
-                      <AlertDescription>請選擇您的保險公司，然後輸入您的帳號密碼進行連結</AlertDescription>
-                    </Alert>
-
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {insuranceCompanies.map((company) => (
-                        <Card
-                          key={company.id}
-                          className="cursor-pointer hover:bg-gray-50 transition-colors"
-                          onClick={() => setSelectedCompany(company.id)}
-                        >
-                          <CardHeader className="p-4">
-                            <div className="flex flex-col items-center text-center">
-                              <Shield className="h-10 w-10 text-teal-600 mb-2" />
-                              <CardTitle className="text-base">{company.name}</CardTitle>
-                            </div>
-                          </CardHeader>
-                        </Card>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Alert>
-                      <Info className="h-4 w-4" />
-                      <AlertTitle>輸入帳號密碼</AlertTitle>
-                      <AlertDescription>
-                        請輸入您在{insuranceCompanies.find((c) => c.id === selectedCompany)?.name}的帳號密碼
-                      </AlertDescription>
-                    </Alert>
-
-                    <div className="space-y-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="username">帳號</Label>
-                        <Input
-                          id="username"
-                          placeholder="請輸入帳號"
-                          value={credentials.username}
-                          onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
-                          disabled={isUploading || isProcessing || isComplete}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="password">密碼</Label>
-                        <Input
-                          id="password"
-                          type="password"
-                          placeholder="請輸入密碼"
-                          value={credentials.password}
-                          onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-                          disabled={isUploading || isProcessing || isComplete}
-                        />
-                      </div>
-                    </div>
-
-                    {uploadError && (
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>錯誤</AlertTitle>
-                        <AlertDescription>{uploadError}</AlertDescription>
-                      </Alert>
-                    )}
-
-                    {(isUploading || isProcessing) && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium">{isUploading ? "連接中..." : "處理中..."}</p>
-                          <p className="text-sm text-gray-500">{progress}%</p>
-                        </div>
-                        <Progress value={progress} className="h-2" />
-                        <p className="text-xs text-gray-500">
-                          {isUploading
-                            ? "正在連接保險公司系統，請稍候..."
-                            : "正在分析您的保單資訊，這可能需要幾分鐘時間..."}
-                        </p>
-                      </div>
-                    )}
-
-                    {isComplete && (
-                      <Alert className="bg-green-50 text-green-800 border-green-200">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <AlertTitle>連結成功</AlertTitle>
-                        <AlertDescription>
-                          <p>您的保單資訊已成功導入，共導入 3 份保單：</p>
-                          <ul className="list-disc list-inside mt-2 space-y-1">
-                            <li>安心醫療保險 (CT-MED-123456)</li>
-                            <li>重大疾病保險 (SK-CI-789012)</li>
-                            <li>意外傷害保險 (FB-PA-345678)</li>
-                          </ul>
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </>
-                )}
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                {selectedCompany ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedCompany(null)
-                        setCredentials({ username: "", password: "" })
-                        setUploadError(null)
-                        setIsUploaded(false)
-                        setIsComplete(false)
-                        setProgress(0)
-                      }}
-                      disabled={isUploading || isProcessing}
-                    >
-                      返回
-                    </Button>
-                    {!isComplete ? (
-                      <Button
-                        onClick={handleConnect}
-                        disabled={
-                          !credentials.username || !credentials.password || isUploading || isProcessing || isComplete
-                        }
-                        className="bg-teal-600 hover:bg-teal-700"
-                      >
-                        {isUploading || isProcessing ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            {isUploading ? "連接中..." : "處理中..."}
-                          </>
-                        ) : (
-                          "連結帳號"
-                        )}
-                      </Button>
-                    ) : (
-                      <Button asChild className="bg-teal-600 hover:bg-teal-700">
-                        <Link href="/insurance">查看保單</Link>
-                      </Button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <Button variant="outline" asChild>
-                      <Link href="/insurance">取消</Link>
-                    </Button>
-                    <Button disabled>請選擇保險公司</Button>
-                  </>
-                )}
-              </CardFooter>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="manual">
-            <Card>
-              <CardHeader>
-                <CardTitle>手動上傳保單</CardTitle>
-                <CardDescription>上傳您的保單PDF或圖片檔案</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertTitle>支援的檔案格式</AlertTitle>
-                  <AlertDescription>您可以上傳 PDF、JPG 或 PNG 格式的保單掃描檔或照片</AlertDescription>
-                </Alert>
-
-                <div className="grid w-full gap-1.5">
-                  <Label htmlFor="policy-file">上傳保單檔案</Label>
-                  <div className="mt-2">
-                    <div className="flex items-center justify-center w-full">
-                      <label
-                        htmlFor="policy-file"
-                        className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
-                      >
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                          <FileUp className="w-10 h-10 mb-3 text-gray-400" />
-                          <p className="mb-2 text-sm text-gray-500">
-                            <span className="font-semibold">點擊上傳</span> 或拖放檔案
-                          </p>
-                          <p className="text-xs text-gray-500">支援 PDF、JPG 或 PNG 格式</p>
-                          {file && (
-                            <div className="mt-4 flex items-center gap-2 text-sm font-medium text-teal-600">
-                              <FileText className="h-4 w-4" />
-                              {file.name}
-                            </div>
-                          )}
-                        </div>
-                        <Input
-                          id="policy-file"
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          className="hidden"
-                          onChange={handleFileChange}
-                          disabled={isUploading || isProcessing || isComplete}
-                        />
-                      </label>
+              <CardContent className="space-y-6">
+                {/* Notice Section */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-medium text-blue-900 mb-2">注意事項</h4>
+                      <p className="text-sm text-blue-800 mb-2">上傳文件時，請注意以下事項：</p>
+                      <ul className="text-sm text-blue-800 space-y-1">
+                        <li>• 檔案格式支援 JPG、PNG、GIF、WebP</li>
+                        <li>• 檔案大小請勿超過10MB</li>
+                        <li>• 上傳檔案請確保內容清晰，文字部分可辨識</li>
+                        <li>• 系統將根據您上傳的文件，自動分析保單內容</li>
+                        <li>• 自動辨識結果可能不完全準確，請檢查後再提交</li>
+                      </ul>
                     </div>
                   </div>
                 </div>
 
-                {uploadError && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>錯誤</AlertTitle>
-                    <AlertDescription>{uploadError}</AlertDescription>
-                  </Alert>
-                )}
-
-                {(isUploading || isProcessing) && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">{isUploading ? "上傳中..." : "處理中..."}</p>
-                      <p className="text-sm text-gray-500">{progress}%</p>
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <h4 className="font-medium text-red-900 mb-2">錯誤</h4>
+                        <p className="text-sm text-red-800">{error}</p>
+                      </div>
                     </div>
-                    <Progress value={progress} className="h-2" />
-                    <p className="text-xs text-gray-500">
-                      {isUploading ? "正在上傳您的檔案，請稍候..." : "正在分析您的保單內容，這可能需要幾分鐘時間..."}
-                    </p>
                   </div>
                 )}
 
-                {isComplete && (
-                  <Alert className="bg-green-50 text-green-800 border-green-200">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <AlertTitle>上傳成功</AlertTitle>
-                    <AlertDescription>
-                      <p>您的保單已成功上傳並分析完成：</p>
-                      <ul className="list-disc list-inside mt-2 space-y-1">
-                        <li>保險公司: 國泰人壽</li>
-                        <li>保單名稱: 安心醫療保險</li>
-                        <li>保單號碼: CT-MED-123456</li>
-                        <li>保障期間: 2020-01-15 至 2030-01-14</li>
-                      </ul>
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" asChild disabled={isUploading || isProcessing}>
-                  <Link href="/insurance">取消</Link>
-                </Button>
-                {!isComplete ? (
-                  <Button
-                    onClick={handleUpload}
-                    disabled={!file || isUploading || isProcessing || isComplete}
-                    className="bg-teal-600 hover:bg-teal-700"
-                  >
-                    {isUploading || isProcessing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {isUploading ? "上傳中..." : "處理中..."}
-                      </>
+                {!isComplete && (
+                  <div>
+                    {isProcessing ? (
+                      <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto"></div>
+                        <p className="text-gray-500 mt-2">AI 分析處理中...</p>
+                      </div>
                     ) : (
-                      "上傳檔案"
+                      <UploadZone 
+                        onFileProcessed={handleFileUpload}
+                        onError={handleFileError}
+                      />
                     )}
-                  </Button>
-                ) : (
-                  <Button asChild className="bg-teal-600 hover:bg-teal-700">
-                    <Link href="/insurance">查看保單</Link>
-                  </Button>
+                  </div>
                 )}
-              </CardFooter>
+
+                {isComplete && analysisResult && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <h4 className="font-medium text-green-900 mb-2">辨識完成</h4>
+                        <p className="text-sm text-green-800 mb-3">
+                          系統已成功辨識您的保單資料：
+                        </p>
+                        <ul className="text-sm text-green-800 space-y-1 mb-4">
+                          <li>• 保險公司：{analysisResult.company || '未識別'}</li>
+                          <li>• 保單名稱：{analysisResult.name || '未識別'}</li>
+                          <li>• 保單號碼：{analysisResult.number || '未識別'}</li>
+                          <li>• 保障期間：{analysisResult.startDate || '未識別'} 至 {analysisResult.endDate || '未識別'}</li>
+                        </ul>
+                        <p className="text-sm text-green-700">
+                          辨識結果「不一定」是百分百正確。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <Button variant="outline" onClick={() => {
+                    setIsComplete(false)
+                    setIsProcessing(false)
+                    setAnalysisResult(null)
+                    setError(null)
+                  }}>
+                    取消
+                  </Button>
+                  {isComplete && (
+                    <Button onClick={handleAutoNext} className="bg-teal-600 hover:bg-teal-700">
+                      下一步
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="manual" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl">手動添加保單</CardTitle>
+                <CardDescription>
+                  請填寫您的保險保單資訊
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                {/* Basic Information */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">基本資訊</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label htmlFor="company" className="text-sm font-medium mb-2 block">
+                        保險公司
+                      </Label>
+                      <Select value={formData.company} onValueChange={(value) => handleInputChange("company", value)}>
+                        <SelectTrigger className="h-11">
+                          <SelectValue placeholder="選擇保險公司" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cathay">國泰人壽</SelectItem>
+                          <SelectItem value="fubon">富邦人壽</SelectItem>
+                          <SelectItem value="shin-kong">新光人壽</SelectItem>
+                          <SelectItem value="nan-shan">南山人壽</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="type" className="text-sm font-medium mb-2 block">
+                        保單類型
+                      </Label>
+                      <Select value={formData.type} onValueChange={(value) => handleInputChange("type", value)}>
+                        <SelectTrigger className="h-11">
+                          <SelectValue placeholder="選擇保單類型" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="medical">醫療險</SelectItem>
+                          <SelectItem value="life">壽險</SelectItem>
+                          <SelectItem value="accident">意外險</SelectItem>
+                          <SelectItem value="cancer">癌症險</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="name" className="text-sm font-medium mb-2 block">
+                        保單名稱
+                      </Label>
+                      <Input
+                        id="name"
+                        placeholder="例：安心醫療保險"
+                        value={formData.name}
+                        onChange={(e) => handleInputChange("name", e.target.value)}
+                        className="h-11"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="number" className="text-sm font-medium mb-2 block">
+                        保單號碼
+                      </Label>
+                      <Input
+                        id="number"
+                        placeholder="例：CT-MED-123456"
+                        value={formData.number}
+                        onChange={(e) => handleInputChange("number", e.target.value)}
+                        className="h-11"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="startDate" className="text-sm font-medium mb-2 block">
+                        保障開始日期
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="startDate"
+                          type="date"
+                          value={formData.startDate}
+                          onChange={(e) => handleInputChange("startDate", e.target.value)}
+                          className="h-11"
+                        />
+                        <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="endDate" className="text-sm font-medium mb-2 block">
+                        保障結束日期
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="endDate"
+                          type="date"
+                          value={formData.endDate}
+                          onChange={(e) => handleInputChange("endDate", e.target.value)}
+                          className="h-11"
+                        />
+                        <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Coverage Range */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">保障範圍</h3>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-12 gap-4 p-3 bg-gray-50 rounded-lg font-medium text-sm">
+                      <div className="col-span-5">項目名稱</div>
+                      <div className="col-span-4">金額</div>
+                      <div className="col-span-2">單位</div>
+                      <div className="col-span-1"></div>
+                    </div>
+                    {coverageItems.map((item, index) => (
+                      <div key={index} className="grid grid-cols-12 gap-4 items-center">
+                        <div className="col-span-5">
+                          <Input
+                            placeholder="例：住院醫療"
+                            value={item.name}
+                            onChange={(e) => handleCoverageChange(index, "name", e.target.value)}
+                            className="h-11"
+                          />
+                        </div>
+                        <div className="col-span-4">
+                          <Input
+                            placeholder="例：3000"
+                            value={item.amount}
+                            onChange={(e) => handleCoverageChange(index, "amount", e.target.value)}
+                            className="h-11"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Select value={item.unit} onValueChange={(value) => handleCoverageChange(index, "unit", value)}>
+                            <SelectTrigger className="h-11">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="元">元</SelectItem>
+                              <SelectItem value="萬元">萬元</SelectItem>
+                              <SelectItem value="次">次</SelectItem>
+                              <SelectItem value="日">日</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="col-span-1">
+                          {coverageItems.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeCoverageItem(index)}
+                              className="h-11 w-11 p-0"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      onClick={addCoverageItem}
+                      className="w-full h-11 border-dashed border-2 text-teal-600 border-teal-300 hover:bg-teal-50"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      新增保障項目
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Other Information */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">其他資訊</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label htmlFor="insuredName" className="text-sm font-medium mb-2 block">
+                        被保險人
+                      </Label>
+                      <Input
+                        id="insuredName"
+                        placeholder="例：王小明"
+                        value={formData.insuredName}
+                        onChange={(e) => handleInputChange("insuredName", e.target.value)}
+                        className="h-11"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="beneficiary" className="text-sm font-medium mb-2 block">
+                        受益人
+                      </Label>
+                      <Input
+                        id="beneficiary"
+                        placeholder="例：王太太"
+                        value={formData.beneficiary}
+                        onChange={(e) => handleInputChange("beneficiary", e.target.value)}
+                        className="h-11"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-between pt-6">
+                  <Button variant="outline">
+                    取消
+                  </Button>
+                  <Button onClick={handleSubmit} className="bg-teal-600 hover:bg-teal-700">
+                    儲存
+                  </Button>
+                </div>
+              </CardContent>
             </Card>
           </TabsContent>
         </Tabs>

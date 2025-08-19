@@ -2,238 +2,593 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import Link from "next/link"
+import { useState, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Progress } from "@/components/ui/progress"
-import { FileUp, FileText, ArrowLeft, CheckCircle2, Info, AlertCircle, Loader2 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Upload, FileText, Camera, CheckCircle, ArrowLeft, CalendarIcon, AlertCircle, Loader2, Check } from 'lucide-react'
+import { format } from "date-fns"
+import { zhTW } from "date-fns/locale"
+import { cn } from "@/lib/utils"
+import { OpenAIService } from '@/lib/openaiService'
+import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
+import { userDataService, generateId } from "@/lib/storage"
+import { checkAuth } from "@/app/actions/auth-service"
 
-export default function ImportMedicalRecordsPage() {
-  const [file, setFile] = useState<File | null>(null)
+
+interface ExtractedData {
+  hospital: string
+  department: string
+  doctor: string
+  visitDate: string
+  diagnosis: string
+  treatment: string
+  medication: string
+  medicalExam: string
+  isFirstOccurrence: string
+}
+
+export default function MedicalRecordsImportPage() {
+  const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [activeTab, setActiveTab] = useState("auto")
   const [isUploading, setIsUploading] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [isComplete, setIsComplete] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const [progress, setProgress] = useState(0)
+  const [isCompleted, setIsCompleted] = useState(false)
+  const [isSaved, setIsSaved] = useState(false)
+  const [extractedData, setExtractedData] = useState<ExtractedData | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
-      setUploadError(null)
+  // Manual form states
+  const [formData, setFormData] = useState({
+    hospital: "",
+    department: "",
+    doctor: "",
+    visitDate: undefined as Date | undefined,
+    medicalExam: "",
+    diagnosis: "",
+    treatment: "",
+    medication: "",
+    isFirstOccurrence: "",
+  })
+
+  // 檢查用戶登入狀態
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const { isLoggedIn, user: authUser } = await checkAuth()
+        if (isLoggedIn && authUser) {
+          setUser(authUser)
+        }
+      } catch (error) {
+        console.error('獲取用戶資訊失敗:', error)
+      }
+    }
+    fetchUser()
+  }, [])
+
+  const handleFileUpload = async (fileData: UploadedFile | null) => {
+    if (!fileData) return
+
+    setIsUploading(true)
+    setError(null)
+
+    try {
+      console.log('開始分析醫療記錄文件:', fileData.filename)
+
+      setIsUploading(false)
+      setIsProcessing(true)
+
+      const openaiService = new OpenAIService()
+      console.log('開始 AI 分析...')
+      const result = await openaiService.analyzeMedicalRecord(
+        fileData.text || '', 
+        fileData.base64
+      )
+      console.log('AI 分析結果:', result)
+
+      setIsProcessing(false)
+      setIsCompleted(true)
+
+      // Convert result to expected format
+      setExtractedData({
+        hospital: result.hospital || "未識別",
+        department: result.department || "未識別", 
+        doctor: result.doctor || "未識別",
+        visitDate: result.visitDate || "未識別",
+        diagnosis: result.diagnosis || "未識別",
+        treatment: result.treatment || "未識別",
+        medication: result.medication || "未識別",
+        medicalExam: result.medicalExam || "未識別",
+        isFirstOccurrence: result.isFirstOccurrence || "未識別"
+      })
+    } catch (error) {
+      console.error('Error analyzing medical record:', error)
+      setError('AI 分析失敗，請稍後再試或使用手動輸入')
+      setIsProcessing(false)
+      setIsUploading(false)
     }
   }
 
-  const handleUpload = () => {
-    if (!file) {
-      setUploadError("請選擇檔案")
+  const handleFileError = (errorMessage: string) => {
+    setError(errorMessage)
+  }
+
+  const handleNext = async () => {
+    if (!extractedData || !user?.id) {
+      setError('請先登入或重新分析')
+      return
+    }
+    
+    try {
+      // Prepare medical record data
+      const recordData = {
+        id: generateId(),
+        fileName: 'ai_analyzed',
+        fileType: 'auto',
+        documentType: 'medical' as const,
+        uploadDate: new Date().toISOString(),
+        fileSize: 0,
+        textContent: '',
+        imageBase64: null,
+        medicalInfo: {
+          hospital: extractedData.hospital,
+          department: extractedData.department,
+          doctor: extractedData.doctor,
+          visitDate: extractedData.visitDate,
+          diagnosis: extractedData.diagnosis,
+          treatment: extractedData.treatment,
+          medication: extractedData.medication,
+          medicalExam: extractedData.medicalExam,
+          isFirstOccurrence: extractedData.isFirstOccurrence
+        }
+      }
+      
+      // Save using userDataService
+      await userDataService.saveMedicalRecord(user.id, recordData)
+      
+      setIsSaved(true)
+    } catch (error) {
+      console.error('Error saving medical record:', error)
+      setError('保存失敗，請稍後再試')
+    }
+  }
+
+  const handleManualSubmit = async () => {
+    if (!user?.id) {
+      setError('請先登入')
       return
     }
 
-    setIsUploading(true)
-    setProgress(0)
-
-    // 模擬上傳過程
-    const uploadInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(uploadInterval)
-          setIsUploading(false)
-          setIsProcessing(true)
-
-          // 模擬處理過程
-          setTimeout(() => {
-            setIsProcessing(false)
-            setIsComplete(true)
-          }, 2000)
-
-          return 100
+    try {
+      // Prepare medical record data
+      const recordData = {
+        id: generateId(),
+        fileName: 'manual_input',
+        fileType: 'manual',
+        documentType: 'medical' as const,
+        uploadDate: new Date().toISOString(),
+        fileSize: 0,
+        textContent: '',
+        imageBase64: null,
+        medicalInfo: {
+          hospital: formData.hospital,
+          department: formData.department,
+          doctor: formData.doctor,
+          visitDate: formData.visitDate ? format(formData.visitDate, "yyyy-MM-dd") : "",
+          medicalExam: formData.medicalExam,
+          diagnosis: formData.diagnosis,
+          treatment: formData.treatment,
+          medication: formData.medication,
+          isFirstOccurrence: formData.isFirstOccurrence
         }
-        return prev + 10
-      })
-    }, 300)
+      }
+      
+      // Save using userDataService
+      await userDataService.saveMedicalRecord(user.id, recordData)
+      
+      setIsSaved(true)
+    } catch (error) {
+      console.error('Error saving medical record:', error)
+      setError('保存失敗，請稍後再試')
+    }
+  }
+
+  const handleReturnToOverview = () => {
+    router.push("/medical-records")
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  }
+
+  if (isSaved) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center gap-2 mb-6">
+            <Button variant="ghost" size="sm" onClick={() => router.back()} className="flex items-center gap-1">
+              <ArrowLeft className="h-4 w-4" />
+              返回病歷管理
+            </Button>
+          </div>
+
+          <Card>
+            <CardHeader className="text-center">
+              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <Check className="h-8 w-8 text-green-600" />
+              </div>
+              <CardTitle className="text-2xl text-green-600">儲存成功</CardTitle>
+              <CardDescription>您的醫療記錄已成功儲存至系統</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-medium mb-3">已儲存的醫療記錄</h3>
+                <div className="space-y-2 text-sm">
+                  {activeTab === "auto" && extractedData ? (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">醫院：</span>
+                        <span>{extractedData.hospital}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">科別：</span>
+                        <span>{extractedData.department}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">醫師：</span>
+                        <span>{extractedData.doctor}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">就診日期：</span>
+                        <span>{extractedData.visitDate}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">診斷：</span>
+                        <span>{extractedData.diagnosis}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">醫院：</span>
+                        <span>{formData.hospital || "未填寫"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">科別：</span>
+                        <span>{formData.department || "未填寫"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">醫師：</span>
+                        <span>{formData.doctor || "未填寫"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">就診日期：</span>
+                        <span>{formData.visitDate ? format(formData.visitDate, "yyyy-MM-dd") : "未填寫"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">診斷：</span>
+                        <span>{formData.diagnosis || "未填寫"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">是否首次發病：</span>
+                        <span>
+                          {formData.isFirstOccurrence === "yes"
+                            ? "是，首次發病"
+                            : formData.isFirstOccurrence === "no"
+                              ? "否，非首次發病"
+                              : "未填寫"}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => router.back()} className="flex-1 bg-transparent">
+                  取消
+                </Button>
+                <Button onClick={handleReturnToOverview} className="flex-1 bg-teal-600 hover:bg-teal-700">
+                  返回病歷管理
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="container py-8">
-      <div className="flex items-center mb-8">
-        <Link href="/medical-records">
-          <Button variant="ghost" size="sm" className="gap-1">
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-2 mb-6">
+          <Button variant="ghost" size="sm" onClick={() => router.back()} className="flex items-center gap-1">
             <ArrowLeft className="h-4 w-4" />
             返回病歷管理
           </Button>
-        </Link>
-      </div>
+        </div>
 
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">導入醫療記錄</h1>
-        <p className="text-gray-500 mb-8">從衛服部健康存摺或醫院系統導入您的醫療記錄</p>
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">添加醫療記錄</h1>
+          <p className="text-gray-600">手動添加或上傳您的醫療記錄</p>
+        </div>
 
-        <Tabs defaultValue="health-passport" className="w-full">
-          <TabsList className="mb-4 grid grid-cols-2 w-full max-w-md">
-            <TabsTrigger value="health-passport">衛服部健康存摺</TabsTrigger>
-            <TabsTrigger value="hospital">醫院系統</TabsTrigger>
-          </TabsList>
+        <Card>
+          <CardContent className="p-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="auto">自動辨識</TabsTrigger>
+                <TabsTrigger value="manual">手動輸入</TabsTrigger>
+              </TabsList>
 
-          <TabsContent value="health-passport">
-            <Card>
-              <CardHeader>
-                <CardTitle>從衛服部健康存摺導入</CardTitle>
-                <CardDescription>請先從衛服部健康存摺網站下載您的醫療記錄，然後上傳至本平台</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+              <TabsContent value="auto" className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-semibold mb-2">自動辨識病歷</h2>
+                  <p className="text-gray-600 mb-4">上傳病歷文件並自動辨識病歷內容，系統將自動解析病歷內容</p>
+                </div>
+
                 <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertTitle>如何從衛服部健康存摺下載醫療記錄？</AlertTitle>
+                  <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    <ol className="list-decimal list-inside space-y-1 mt-2">
-                      <li>
-                        前往
-                        <a
-                          href="https://eecapply.mohw.gov.tw/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-teal-600 hover:underline mx-1"
-                        >
-                          衛服部健康存摺網站
-                        </a>
-                      </li>
-                      <li>使用健保卡或自然人憑證登入</li>
-                      <li>選擇「下載健康資料」</li>
-                      <li>選擇要下載的資料類型（如：門診紀錄、住院紀錄等）</li>
-                      <li>下載XML或PDF格式的檔案</li>
-                    </ol>
+                    <strong>注意事項</strong>
+                    <br />
+                    上傳文件時，請注意以下事項：
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li>檔案格式支援 JPG、PNG、GIF、WebP</li>
+                      <li>檔案大小請勿超過 5MB</li>
+                      <li>系統將保護您的個人隱私，所有資料將被加密處理</li>
+                      <li>自動辨識結果可能需要人工確認，請確認後再儲存</li>
+                    </ul>
                   </AlertDescription>
                 </Alert>
 
-                <div className="grid w-full gap-1.5">
-                  <Label htmlFor="health-passport-file">上傳健康存摺檔案</Label>
-                  <div className="mt-2">
-                    <div className="flex items-center justify-center w-full">
-                      <label
-                        htmlFor="health-passport-file"
-                        className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
-                      >
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                          <FileUp className="w-10 h-10 mb-3 text-gray-400" />
-                          <p className="mb-2 text-sm text-gray-500">
-                            <span className="font-semibold">點擊上傳</span> 或拖放檔案
-                          </p>
-                          <p className="text-xs text-gray-500">支援 XML 或 PDF 格式</p>
-                          {file && (
-                            <div className="mt-4 flex items-center gap-2 text-sm font-medium text-teal-600">
-                              <FileText className="h-4 w-4" />
-                              {file.name}
-                            </div>
-                          )}
-                        </div>
-                        <Input
-                          id="health-passport-file"
-                          type="file"
-                          accept=".xml,.pdf"
-                          className="hidden"
-                          onChange={handleFileChange}
-                          disabled={isUploading || isProcessing || isComplete}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {uploadError && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>錯誤</AlertTitle>
-                    <AlertDescription>{uploadError}</AlertDescription>
-                  </Alert>
-                )}
-
-                {(isUploading || isProcessing) && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">{isUploading ? "上傳中..." : "處理中..."}</p>
-                      <p className="text-sm text-gray-500">{progress}%</p>
-                    </div>
-                    <Progress value={progress} className="h-2" />
-                    <p className="text-xs text-gray-500">
-                      {isUploading ? "正在上傳您的檔案，請稍候..." : "正在分析您的醫療記錄，這可能需要幾分鐘時間..."}
-                    </p>
-                  </div>
-                )}
-
-                {isComplete && (
-                  <Alert className="bg-green-50 text-green-800 border-green-200">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <AlertTitle>處理完成</AlertTitle>
-                    <AlertDescription>
-                      <p>您的醫療記錄已成功導入，共導入 4 筆記錄：</p>
-                      <ul className="list-disc list-inside mt-2 space-y-1">
-                        <li>台大醫院 - 腫瘤科 (2023-12-15)</li>
-                        <li>榮總 - 心臟內科 (2023-10-05)</li>
-                        <li>三軍總醫院 - 骨科 (2023-08-22)</li>
-                        <li>長庚醫院 - 神經內科 (2023-07-10)</li>
-                      </ul>
+                {error && (
+                  <Alert className="bg-red-50 border-red-200">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertDescription className="text-red-800">
+                      <strong>錯誤：</strong>{error}
                     </AlertDescription>
                   </Alert>
                 )}
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" asChild disabled={isUploading || isProcessing}>
-                  <Link href="/medical-records">取消</Link>
-                </Button>
-                {!isComplete ? (
-                  <Button
-                    onClick={handleUpload}
-                    disabled={!file || isUploading || isProcessing || isComplete}
-                    className="bg-teal-600 hover:bg-teal-700"
-                  >
-                    {isUploading || isProcessing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {isUploading ? "上傳中..." : "處理中..."}
-                      </>
-                    ) : (
-                      "上傳檔案"
-                    )}
-                  </Button>
-                ) : (
-                  <Button asChild className="bg-teal-600 hover:bg-teal-700">
-                    <Link href="/medical-records">查看病歷</Link>
-                  </Button>
-                )}
-              </CardFooter>
-            </Card>
-          </TabsContent>
 
-          <TabsContent value="hospital">
-            <Card>
-              <CardHeader>
-                <CardTitle>從醫院系統導入</CardTitle>
-                <CardDescription>直接從合作醫院系統導入您的醫療記錄</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {["台大醫院", "榮總", "三軍總醫院", "長庚醫院", "馬偕醫院", "新光醫院"].map((hospital) => (
-                    <Card key={hospital} className="cursor-pointer hover:bg-gray-50">
-                      <CardHeader className="p-4">
-                        <CardTitle className="text-base">{hospital}</CardTitle>
-                      </CardHeader>
-                      <CardFooter className="p-4 pt-0">
-                        <Button variant="outline" size="sm" className="w-full">
-                          連結帳號
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
+                {!isUploading && !isProcessing && !isCompleted && (
+                  <UploadZone 
+                    onFileProcessed={handleFileUpload}
+                    onError={handleFileError}
+                  />
+                )}
+
+                {isUploading && (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-teal-600 mx-auto mb-4" />
+                    <p className="text-lg font-medium">上傳中...</p>
+                    <p className="text-gray-500">正在上傳您的檔案</p>
+                  </div>
+                )}
+
+                {isProcessing && (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-teal-600 mx-auto mb-4" />
+                    <p className="text-lg font-medium">辨識中...</p>
+                    <p className="text-gray-500">AI 分析處理中</p>
+                  </div>
+                )}
+
+                {isCompleted && extractedData && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-green-600">
+                      <CheckCircle className="h-5 w-5" />
+                      <span className="font-medium">解讀完成</span>
+                    </div>
+
+                    <Alert className="bg-green-50 border-green-200">
+                      <Check className="h-4 w-4 text-green-600" />
+                      <AlertDescription className="text-green-800">
+                        <strong>系統已自動辨識您的病歷內容：</strong>
+                        <ul className="list-disc list-inside mt-2 space-y-1">
+                          <li>醫院：{extractedData.hospital}</li>
+                          <li>科別：{extractedData.department}</li>
+                          <li>醫師：{extractedData.doctor}</li>
+                          <li>日期：{extractedData.visitDate}</li>
+                        </ul>
+                        <p className="mt-2">辨識結果「不一定」是百分百正確。</p>
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button variant="outline" onClick={() => router.back()} className="bg-transparent">
+                    取消
+                  </Button>
+                  {isCompleted && (
+                    <Button onClick={handleNext} className="bg-teal-600 hover:bg-teal-700">
+                      下一步
+                    </Button>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+              </TabsContent>
+
+              <TabsContent value="manual" className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-semibold mb-2">手動添加病歷</h2>
+                  <p className="text-gray-600 mb-4">手動填寫您的醫療記錄資訊</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="hospital">醫院名稱</Label>
+                    <Input
+                      id="hospital"
+                      placeholder="例：台大醫院"
+                      value={formData.hospital}
+                      onChange={(e) => setFormData({ ...formData, hospital: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="department">科別</Label>
+                    <Select
+                      value={formData.department}
+                      onValueChange={(value) => setFormData({ ...formData, department: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="選擇科別" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="internal">內科</SelectItem>
+                        <SelectItem value="surgery">外科</SelectItem>
+                        <SelectItem value="pediatrics">小兒科</SelectItem>
+                        <SelectItem value="obstetrics">婦產科</SelectItem>
+                        <SelectItem value="orthopedics">骨科</SelectItem>
+                        <SelectItem value="dermatology">皮膚科</SelectItem>
+                        <SelectItem value="ophthalmology">眼科</SelectItem>
+                        <SelectItem value="ent">耳鼻喉科</SelectItem>
+                        <SelectItem value="psychiatry">精神科</SelectItem>
+                        <SelectItem value="neurology">神經科</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="visitDate">就診日期</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal bg-transparent",
+                            !formData.visitDate && "text-muted-foreground",
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {formData.visitDate ? (
+                            format(formData.visitDate, "yyyy/MM/dd", { locale: zhTW })
+                          ) : (
+                            <span>年/月/日</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={formData.visitDate}
+                          onSelect={(date) => setFormData({ ...formData, visitDate: date })}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="doctor">主治醫師</Label>
+                    <Input
+                      id="doctor"
+                      placeholder="例：王醫師"
+                      value={formData.doctor}
+                      onChange={(e) => setFormData({ ...formData, doctor: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="isFirstOccurrence">是否為首次發病</Label>
+                    <Select
+                      value={formData.isFirstOccurrence}
+                      onValueChange={(value) => setFormData({ ...formData, isFirstOccurrence: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="請選擇" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">是，首次發病</SelectItem>
+                        <SelectItem value="no">否，非首次發病</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="medicalExam">醫學檢查項目</Label>
+                    <Select
+                      value={formData.medicalExam}
+                      onValueChange={(value) => setFormData({ ...formData, medicalExam: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="檢查" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="blood-test">血液檢查</SelectItem>
+                        <SelectItem value="urine-test">尿液檢查</SelectItem>
+                        <SelectItem value="x-ray">X光檢查</SelectItem>
+                        <SelectItem value="ct-scan">電腦斷層</SelectItem>
+                        <SelectItem value="mri">核磁共振</SelectItem>
+                        <SelectItem value="ultrasound">超音波檢查</SelectItem>
+                        <SelectItem value="ecg">心電圖</SelectItem>
+                        <SelectItem value="endoscopy">內視鏡檢查</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="diagnosis">診斷結果</Label>
+                    <Textarea
+                      id="diagnosis"
+                      placeholder="例：急性腸胃炎"
+                      value={formData.diagnosis}
+                      onChange={(e) => setFormData({ ...formData, diagnosis: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="treatment">治療方案</Label>
+                    <Textarea
+                      id="treatment"
+                      placeholder="例：藥物治療、休息"
+                      value={formData.treatment}
+                      onChange={(e) => setFormData({ ...formData, treatment: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="medication">用藥記錄</Label>
+                    <Textarea
+                      id="medication"
+                      placeholder="例：普拿疼、腸胃藥"
+                      value={formData.medication}
+                      onChange={(e) => setFormData({ ...formData, medication: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button variant="outline" onClick={() => router.back()} className="bg-transparent">
+                    取消
+                  </Button>
+                  <Button onClick={handleManualSubmit} className="bg-teal-600 hover:bg-teal-700">
+                    儲存
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
