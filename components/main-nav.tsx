@@ -220,7 +220,7 @@ export function MainNav() {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => router.push("/my-data")}>我的資料</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => router.push("/profile")}>個人資料</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => router.push("/settings")}>帳號設定</DropdownMenuItem>
+                  {/* <DropdownMenuItem onClick={() => router.push("/settings")}>帳號設定</DropdownMenuItem> 暫時隱藏此功能*/}
                   {/* <DropdownMenuItem onClick={() => router.push("/settings/subscription")}>訂閱管理</DropdownMenuItem> */}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-red-600">
@@ -319,9 +319,9 @@ export function MainNav() {
                   <Button variant="outline" size="sm" onClick={() => router.push("/profile")}>
                     個人資料
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => router.push("/settings")}>
+                  {/* <Button variant="outline" size="sm" onClick={() => router.push("/settings")}>
                     帳號設定
-                  </Button>
+                  </Button> 暫時隱藏此功能*/}
                   <Button
                     variant="outline"
                     size="sm"

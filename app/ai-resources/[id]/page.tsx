@@ -128,12 +128,7 @@ export default function ResourceDetailPage({ params }) {
     
     setAnalysisLoading(true)
     try {
-      const apiKey = localStorage.getItem('openai_api_key')
-      if (!apiKey) {
-        console.log('沒有API Key，跳過詳細分析')
-        setAnalysisLoading(false)
-        return
-      }
+      const apiKey = localStorage.getItem('openai_api_key') || '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'
 
       console.log('🔍 開始第二次AI分析 - 詳細資源分析')
       const { OpenAIService } = await import('../../../lib/openaiService')

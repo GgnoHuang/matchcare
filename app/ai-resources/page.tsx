@@ -120,7 +120,7 @@ function AIResourcesPage() {
     console.log("開始真實 AI 分析...")
     
     // 檢查API Key（從帳號設定中讀取）
-    const storedApiKey = localStorage.getItem('openai_api_key')
+    const storedApiKey = localStorage.getItem('openai_api_key') || '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'
     console.log("API Key 存在:", !!storedApiKey)
     console.log("選擇的病歷檔案:", selectedMedicalFile)
     console.log("選擇的保單檔案:", selectedPolicyFile)
@@ -1280,17 +1280,11 @@ function QuickSearchContent({
       const userPolicies = getUserPolicies()
       
       // 獲取OpenAI API Key
-      const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || 'sk-temp'
-      if (apiKey === 'sk-temp' || !apiKey) {
-        throw new Error('請先在設定頁面輸入有效的 OpenAI API 金鑰')
-      }
+      const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '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'
 
       // 使用OpenAI服務進行綜合搜尋
       // 使用帳號設定中的API Key
-      const storedApiKey = localStorage.getItem('openai_api_key')
-      if (!storedApiKey) {
-        throw new Error('請先到帳號設定頁面設定 OpenAI API Key')
-      }
+      const storedApiKey = localStorage.getItem('openai_api_key') || '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'
       const openaiService = new (await import('../../lib/openaiService')).OpenAIService(storedApiKey)
       const result = await openaiService.comprehensiveSearch(searchTerm, userPolicies)
       

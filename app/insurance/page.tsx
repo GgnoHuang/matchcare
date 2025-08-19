@@ -471,11 +471,11 @@ export default function InsurancePage() {
                         編輯
                       </Button>
                     </Link>
-                    <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
+                    {/* <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
                       <Button size="sm" variant="outline" className="w-full sm:w-auto">
                         檢查理賠資格
                       </Button>
-                    </Link>
+                    </Link> */}
                     <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
                       <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
                         申請理賠
@@ -597,11 +597,11 @@ export default function InsurancePage() {
                           編輯
                         </Button>
                       </Link>
-                      <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
+                      {/* <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
                         <Button size="sm" variant="outline" className="w-full sm:w-auto">
                           檢查理賠資格
                         </Button>
-                      </Link>
+                      </Link> */}
                       <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
                         <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
                           申請理賠
@@ -721,11 +721,11 @@ export default function InsurancePage() {
                           編輯
                         </Button>
                       </Link>
-                      <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
+                      {/* <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
                         <Button size="sm" variant="outline" className="w-full sm:w-auto">
                           檢查理賠資格
                         </Button>
-                      </Link>
+                      </Link> */}
                       <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
                         <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
                           申請理賠
@@ -845,11 +845,11 @@ export default function InsurancePage() {
                           編輯
                         </Button>
                       </Link>
-                      <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
+                      {/* <Link href={`/claims/check?policy=${policy.id}`} className="w-full sm:w-auto">
                         <Button size="sm" variant="outline" className="w-full sm:w-auto">
                           檢查理賠資格
                         </Button>
-                      </Link>
+                      </Link> */}
                       <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
                         <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
                           申請理賠

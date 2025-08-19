@@ -48,7 +48,23 @@ export class OpenAIService {
   private baseURL: string = 'https://api.openai.com/v1/chat/completions';
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || localStorage.getItem('openai_api_key') || '';
+    const HARD_CODED_KEY = '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'
+    // 優先順序：參數 > localStorage > 硬編碼
+    let resolvedKey = apiKey || ''
+    try {
+      if (!resolvedKey && typeof window !== 'undefined') {
+        const stored = localStorage.getItem('openai_api_key')
+        resolvedKey = stored || ''
+        if (!stored) {
+          localStorage.setItem('openai_api_key', HARD_CODED_KEY)
+          resolvedKey = HARD_CODED_KEY
+        }
+      }
+    } catch {}
+    if (!resolvedKey) {
+      resolvedKey = HARD_CODED_KEY
+    }
+    this.apiKey = resolvedKey
   }
 
   /**

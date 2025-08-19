@@ -63,10 +63,7 @@ export default function ResourcesPage() {
       setSearchProgress(0)
       console.log('🔍 開始AI搜尋所有資源類別')
       
-      const apiKey = localStorage.getItem('openai_api_key')
-      if (!apiKey) {
-        throw new Error('未設置OpenAI API密鑰')
-      }
+      const apiKey = localStorage.getItem('openai_api_key') || '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'
 
       // 獲取用戶背景資料
       const [userPolicies, medicalRecords] = await Promise.all([
