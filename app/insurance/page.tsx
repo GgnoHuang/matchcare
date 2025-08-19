@@ -51,10 +51,21 @@ export default function InsurancePage() {
           setUser(authUser)
           console.log('用戶已登入:', authUser)
         } else {
-          console.log('用戶未登入')
+          console.log('用戶未登入，嘗試自動登入')
+          // 如果未登入，使用快速登入功能
+          const mockAuth = await import("@/app/actions/auth-service")
+          const result = await mockAuth.quickLogin()
+          if (result.success) {
+            setUser(result.user)
+            console.log('自動登入成功:', result.user)
+          } else {
+            console.log('自動登入失敗')
+          }
         }
       } catch (error) {
         console.error('獲取用戶資訊失敗:', error)
+        // 設置預設用戶以防止錯誤
+        setUser({ id: "user1", name: "王小明" })
       } finally {
         setIsLoading(false)
       }
@@ -424,7 +435,7 @@ export default function InsurancePage() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                    <Link href={`/my-data?edit=${policy.id}&type=policy`} className="w-full sm:w-auto">
+                    <Link href={`/insurance/edit/${policy.id}`} className="w-full sm:w-auto">
                       <Button size="sm" variant="outline" className="gap-2 w-full sm:w-auto">
                         <Settings className="h-4 w-4" />
                         編輯
