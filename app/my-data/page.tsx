@@ -283,10 +283,17 @@ export default function MyDataPage() {
           throw new Error('請先在設定頁面輸入有效的 OpenAI API 金鑰')
         }
         const openaiService = new OpenAIService(apiKey)
-        analyzedData = await openaiService.analyzeInsurancePolicy(
-          fileData.text || '', 
+        // 兩階段：先摘要，再推理
+        const summary = await openaiService.summarizeInsurancePolicy(
+          fileData.text || '',
           fileData.base64
         )
+        const analysis = await openaiService.analyzePolicyFromSummary({
+          policyInfo: summary?.policyInfo || {},
+          flatFields: summary?.flatFields || {}
+        })
+        // 僅將 policyInfo 存入（維持既有結構），其餘結果單獨存放
+        analyzedData = summary?.policyInfo || {}
         analysisSucceeded = true
         setUploadSuccess(`正在儲存保險保單 "${fileData.filename}"...`)
       } catch (aiError) {

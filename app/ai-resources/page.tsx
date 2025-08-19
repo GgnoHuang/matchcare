@@ -776,7 +776,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                     onError={handleFileError}
                   />
                 </div>
-              )}
+              
 
               {/* 錯誤訊息 */}
               {error && (

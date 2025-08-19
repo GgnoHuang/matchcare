@@ -78,12 +78,23 @@ export default function InsuranceImportPage() {
       console.log('開始分析保單文件:', fileData.filename)
       
       const openaiService = new OpenAIService()
-      console.log('開始 AI 分析...')
-      const result = await openaiService.analyzeInsurancePolicy(
-        fileData.text || '', 
+      console.log('開始 AI 分析（兩階段）...')
+      // 第一階段：結構化萃取摘要（policyInfo + flatFields）
+      const summary = await openaiService.summarizeInsurancePolicy(
+        fileData.text || '',
         fileData.base64
       )
-      console.log('AI 分析結果:', result)
+      console.log('AI 摘要結果:', summary)
+
+      // 第二階段：基於摘要推理（最高理賠等）
+      const analysis = await openaiService.analyzePolicyFromSummary({
+        policyInfo: summary?.policyInfo || {},
+        flatFields: summary?.flatFields || {}
+      })
+      console.log('AI 推理結果:', analysis)
+
+      const result = { ...summary, analysisResult: analysis }
+      console.log('AI 分析整合結果:', result)
       
       setAnalysisResult(result)
       setIsComplete(true)
@@ -132,12 +143,11 @@ export default function InsuranceImportPage() {
       const policyData = {
         id: generateId(),
         fileName: 'manual_input',
-        fileType: 'manual',
+        fileType: 'image' as 'image',
         documentType: 'insurance' as const,
         uploadDate: new Date().toISOString(),
         fileSize: 0,
         textContent: '',
-        imageBase64: null,
         policyInfo: {
           policyBasicInfo: {
             insuranceCompany: formData.company,
@@ -179,28 +189,27 @@ export default function InsuranceImportPage() {
       const policyData = {
         id: generateId(),
         fileName: 'ai_analyzed',
-        fileType: 'auto',
+        fileType: 'image' as 'image',
         documentType: 'insurance' as const,
         uploadDate: new Date().toISOString(),
         fileSize: 0,
         textContent: '',
-        imageBase64: null,
-        // 儲存 AI 判斷的最高理賠金額
-        maxClaimAmount: analysisResult.maxClaimAmount || '',
-        maxClaimUnit: analysisResult.maxClaimUnit || '元',
+        // 儲存 AI 判斷的最高理賠金額（第二階段輸出）
+        maxClaimAmount: analysisResult.analysisResult?.maxClaimAmount || '',
+        maxClaimUnit: analysisResult.analysisResult?.maxClaimUnit || '元',
         policyInfo: {
           policyBasicInfo: {
-            insuranceCompany: analysisResult.company || '',
-            policyType: analysisResult.type || '',
-            policyName: analysisResult.name || '',
-            policyNumber: analysisResult.number || '',
-            effectiveDate: analysisResult.startDate || '',
-            expirationDate: analysisResult.endDate || '',
-            insuredName: analysisResult.insuredName || '',
-            beneficiary: analysisResult.beneficiary || ''
+            insuranceCompany: analysisResult.flatFields?.company || analysisResult.policyInfo?.policyBasicInfo?.insuranceCompany || '',
+            policyType: analysisResult.flatFields?.type || analysisResult.policyInfo?.policyBasicInfo?.policyType || '',
+            policyName: analysisResult.flatFields?.name || analysisResult.policyInfo?.policyBasicInfo?.policyName || '',
+            policyNumber: analysisResult.flatFields?.number || analysisResult.policyInfo?.policyBasicInfo?.policyNumber || '',
+            effectiveDate: analysisResult.flatFields?.startDate || analysisResult.policyInfo?.policyBasicInfo?.effectiveDate || '',
+            expirationDate: analysisResult.flatFields?.endDate || analysisResult.policyInfo?.policyBasicInfo?.expiryDate || '',
+            insuredName: analysisResult.flatFields?.insuredName || analysisResult.policyInfo?.insuredPersonInfo?.name || '',
+            beneficiary: analysisResult.flatFields?.beneficiary || analysisResult.policyInfo?.beneficiaryInfo?.name || ''
           },
           coverageDetails: {
-            coverage: analysisResult.coverage || []
+            coverage: analysisResult.policyInfo?.coverageDetails?.coverage || analysisResult.flatFields?.coverage || []
           }
         }
       }
@@ -308,10 +317,10 @@ export default function InsuranceImportPage() {
                           系統已成功辨識您的保單資料：
                         </p>
                         <ul className="text-sm text-green-800 space-y-1 mb-4">
-                          <li>• 保險公司：{analysisResult.company || '未識別'}</li>
-                          <li>• 保單名稱：{analysisResult.name || '未識別'}</li>
-                          <li>• 保單號碼：{analysisResult.number || '未識別'}</li>
-                          <li>• 保障期間：{analysisResult.startDate || '未識別'} 至 {analysisResult.endDate || '未識別'}</li>
+                          <li>• 保險公司：{analysisResult.flatFields?.company || analysisResult.policyInfo?.policyBasicInfo?.insuranceCompany || '未識別'}</li>
+                          <li>• 保單名稱：{analysisResult.flatFields?.name || analysisResult.policyInfo?.policyBasicInfo?.policyName || '未識別'}</li>
+                          <li>• 保單號碼：{analysisResult.flatFields?.number || analysisResult.policyInfo?.policyBasicInfo?.policyNumber || '未識別'}</li>
+                          <li>• 保障期間：{analysisResult.flatFields?.startDate || analysisResult.policyInfo?.policyBasicInfo?.effectiveDate || '未識別'} 至 {analysisResult.flatFields?.endDate || analysisResult.policyInfo?.policyBasicInfo?.expiryDate || '未識別'}</li>
                         </ul>
                         <p className="text-sm text-green-700">
                           辨識結果「不一定」是百分百正確。

@@ -318,6 +318,14 @@ ${fullPolicyData}
   "suggestions": ["建議1", "建議2"]
 }`
 
+    // Debug: 驗證插值是否正確
+    console.log('🧪 Prompt 檢查：', {
+      fileName: policy.fileName,
+      allPoliciesCount: allPolicies.length,
+      medicalRecordsCount: medicalRecords.length
+    })
+    console.log('🧪 Prompt 片段預覽:', analysisPrompt.substring(0, 300))
+
     try {
       const apiKey = localStorage.getItem('openai_api_key')
       if (!apiKey) {
@@ -641,18 +649,18 @@ ${fullPolicyData}
             {evaluation && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {Object.entries(evaluation.sections).map(([sectionKey, section]) => {
-                  const sectionNames = {
+                  const sectionNames: Record<'content' | 'pricing' | 'company' | 'flexibility', string> = {
                     content: '保險內容',
                     pricing: '保險價格', 
                     company: '公司信譽',
                     flexibility: '搭配彈性'
                   }
-                  
+                  const typedKey = sectionKey as keyof typeof sectionNames
                   return (
                     <Card key={sectionKey}>
                       <CardHeader>
                         <CardTitle className="flex items-center justify-between">
-                          {sectionNames[sectionKey]}
+                          {sectionNames[typedKey]}
                           <span className="text-lg font-bold text-teal-600">
                             {section.score}/5
                           </span>
@@ -732,7 +740,7 @@ ${fullPolicyData}
                       上傳時間: {new Date(policy.uploadDate).toLocaleDateString('zh-TW')}
                     </p>
                   </div>
-                  <Badge variant="outline">{policy.fileType?.toUpperCase()}</Badge>
+                  <Badge variant="outline">{(policy.fileType || '').toUpperCase()}</Badge>
                 </div>
               </CardContent>
             </Card>
@@ -745,7 +753,7 @@ ${fullPolicyData}
           </Link>
           <div className="flex gap-2">
             <Button 
-              onClick={() => performAIAnalysis(policy, user?.id)}
+              onClick={() => performAIAnalysis(policy, user?.id || '')}
               disabled={isAnalyzing}
               className="gap-2"
             >

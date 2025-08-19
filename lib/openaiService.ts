@@ -711,6 +711,8 @@ ${imageBase64 ? `## 🖼️ 圖片內容分析
 - 文件顯示「2000元/日」→ amount: "2000", unit: "元/日"
 - 文件顯示「50萬元/次」→ amount: "50", unit: "萬元/次"
 - 文件顯示「1000元/年」→ amount: "1000", unit: "元/年"
+- 文件顯示「20%」→ amount: "20", unit: "%"
+- 文件顯示「3倍」→ amount: "3", unit: "倍"
 
 **特別注意**：
 金額不需要非常精確或者在條文中明文顯示，也可以透過你自身的判斷給予估算
@@ -718,6 +720,7 @@ ${imageBase64 ? `## 🖼️ 圖片內容分析
 - unit 欄位填完整單位描述（如：萬元、元/日、萬元/次）
 - 如果看到「10萬」，絕對不要只取「10」而忽略「萬」
 - 單位可能包含時間頻率：/日、/次、/年、/月等
+- coverage 項目允許出現百分比或倍數（如：% 或 倍）
 
 
 ## 🏆 最高理賠金額專業判斷
@@ -821,6 +824,231 @@ ${imageBase64 ? `## 🖼️ 圖片內容分析
       console.error('保險保單分析錯誤:', error);
       throw error;
     }
+  }
+
+  /**
+   * 第一階段：保單結構化萃取（不減少現有提示內容，只在結構與輸出上加強）
+   * 目標：輸出與現有儲存結構相容的 policyInfo（含 policyBasicInfo 與 coverageDetails.coverage）
+   */
+  async summarizeInsurancePolicy(text: string, imageBase64: string | null = null): Promise<any> {
+    try {
+      console.log('第一階段-保單摘要：文字長度:', text?.length || 0, '圖片:', imageBase64 ? '有' : '無');
+
+      if (!this.apiKey) {
+        throw new Error('請先設定 OpenAI API Key');
+      }
+
+      const prompt = `你是資深保險文件分析專家，專門識別保險保單中的關鍵資訊。請非常仔細地閱讀和分析所有內容。
+
+${text ? `## 📋 文字資料分析
+${text}
+` : ''}
+
+${imageBase64 ? `## 🖼️ 圖片內容分析
+請仔細檢視並分析圖片中的所有保單資訊：
+- 保險公司名稱和標誌
+- 保單類型和名稱
+- 保單號碼和日期
+- 保障內容和金額（特別注意金額單位）
+- 被保險人資訊
+- 所有可見的保險條款內容
+
+**重要**：請逐字識別圖片中的文字內容，不要只提供概括描述。
+` : ''}
+
+## 📤 輸出格式（請同時提供兩個區塊，第二區塊為本系統主用）
+
+### A) flatFields（保留原有需求）
+{
+  "company": "保險公司名稱",
+  "type": "保單類型",
+  "name": "保單名稱",
+  "number": "保單號碼",
+  "startDate": "YYYY-MM-DD",
+  "endDate": "YYYY-MM-DD",
+  "coverage": [
+    { "name": "保障項目名稱", "amount": "金額數字", "unit": "完整單位" }
+  ],
+  "maxClaimAmount": "最高理賠金額數字",
+  "maxClaimUnit": "最高理賠金額單位",
+  "insuredName": "被保險人姓名",
+  "beneficiary": "受益人姓名"
+}
+
+### B) policyInfo（本系統主用；請嚴格符合此結構字段命名）
+{
+  "policyBasicInfo": {
+    "insuranceCompany": "保險公司名稱",
+    "policyName": "保單名稱",
+    "policyType": "保單類型",
+    "policyNumber": "保單號碼",
+    "effectiveDate": "YYYY-MM-DD",
+    "expiryDate": "YYYY-MM-DD",
+    "policyTerms": "（可選）條款重點或原文摘錄"
+  },
+  "coverageDetails": {
+    "coverage": [
+      { "name": "保障項目名稱", "amount": "金額數字", "unit": "完整單位" }
+    ]
+  },
+  "insuredPersonInfo": {
+    "name": "（可選）被保險人姓名"
+  },
+  "beneficiaryInfo": {
+    "name": "（可選）受益人姓名"
+  }
+}
+
+## 🔥 金額與單位規則
+- 金額只填純數字（如：10、5000、300），單位填完整描述（如：萬元、元/日、萬元/次）。
+- 「10萬」請拆為 amount: "10"、unit: "萬元"。
+- 單位可包含時間頻率：/日、/次、/年、/月。
+
+## 🏆 最高理賠金額專業判斷（flatFields 中）
+- 不是單純取 coverage 項目的最大金額。
+- 需考慮保單類型、保障可同時觸發的可能性與條款上限。
+- 若文件明確載明理賠上限，優先使用。
+ - 請輸出「單一理賠事件的整筆金額」，單位僅能是「元/萬元/百萬元/新台幣元/新台幣萬元」。
+ - 禁止在 maxClaimUnit 中出現任何時間/頻率字樣（例如：/日、/次、/年、/月、日、次、年、月、天）。
+ - 若只能得到日額或次額，請推估單一事故最高整筆金額；無法合理推估則將 maxClaimAmount 與 maxClaimUnit 留空字串。
+ - 為避免顯示 0 元，若缺乏明確上限，請提供保守估算並於 notes 說明（除非條款明文為 0 元，需在 notes 引用條款要點）。
+
+## 🎯 其他提醒
+- 只填入從文件可清楚識別的資訊；無法識別者填空字串。日期用 YYYY-MM-DD。
+- 回傳 JSON 時，請同時包含 A) 與 B) 兩個區塊於同一個最外層物件：{ "flatFields": {...}, "policyInfo": {...} }。`;
+
+      const messages = [
+        {
+          role: 'user',
+          content: imageBase64 ? [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: this.generateImageUrl(imageBase64) } }
+          ] : prompt
+        }
+      ];
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: messages,
+          temperature: 0.1,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenAI API 錯誤: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+
+      // 嘗試解析包含 flatFields 與 policyInfo 的最外層 JSON
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          // 友善列印關鍵摘要
+          try {
+            const ff = parsed.flatFields || {};
+            const pi = parsed.policyInfo || {};
+            const basic = pi.policyBasicInfo || {};
+            const cov = (pi.coverageDetails && pi.coverageDetails.coverage) || ff.coverage || [];
+            console.log('[AI] 保單摘要-關鍵欄位');
+            console.log(`  公司: ${ff.company || basic.insuranceCompany || ''}`);
+            console.log(`  類型: ${ff.type || basic.policyType || ''}`);
+            console.log(`  名稱: ${ff.name || basic.policyName || ''}`);
+            console.log(`  號碼: ${ff.number || basic.policyNumber || ''}`);
+            console.log(`  期間: ${ff.startDate || basic.effectiveDate || ''} ~ ${ff.endDate || basic.expiryDate || ''}`);
+            console.log(`  保障數: ${Array.isArray(cov) ? cov.length : 0}`);
+            if (Array.isArray(cov)) {
+              cov.slice(0, 5).forEach((item: any, idx: number) => {
+                console.log(`   - [${idx + 1}] ${item.name || item.type || ''} ${item.amount || ''}${item.unit || ''}`);
+              });
+            }
+            if (ff.maxClaimAmount || ff.maxClaimUnit) {
+              console.log(`  (flat) 最高理賠: ${ff.maxClaimAmount || ''}${ff.maxClaimUnit || ''}`);
+            }
+          } catch {}
+          // 後備：若模型未包一層，嘗試組裝
+          if (!parsed.policyInfo && (parsed.policyBasicInfo || parsed.coverageDetails)) {
+            return { flatFields: {}, policyInfo: parsed };
+          }
+          if (!parsed.flatFields && (parsed.company || parsed.coverage)) {
+            return { flatFields: parsed, policyInfo: {} };
+          }
+          return parsed;
+        } catch (e) {
+          console.warn('第一階段 JSON 解析失敗，返回空結構', e);
+        }
+      }
+
+      return { flatFields: {}, policyInfo: {} };
+    } catch (error) {
+      console.error('保單摘要錯誤:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 第二階段：基於摘要推理（填補/推估所需欄位，例如最高理賠金額…）
+   * 輸入為第一階段的 policyInfo（以及可選 flatFields），輸出 analysisResult 給前端顯示與後續流程。
+   */
+  async analyzePolicyFromSummary(summary: { policyInfo: any, flatFields?: any }): Promise<any> {
+    const prompt = `你是保險理賠與條款專家。以下是保單的結構化摘要，請在不臆測不存在條款的前提下，完成推理：
+
+## 保單摘要（policyInfo）
+${JSON.stringify(summary?.policyInfo || {}, null, 2)}
+
+${summary?.flatFields ? `## 其他摘要（flatFields）\n${JSON.stringify(summary.flatFields, null, 2)}` : ''}
+
+## 🎯 任務
+1. 專業判斷「單一理賠事件的最高可能理賠金額」與單位（maxClaimAmount / maxClaimUnit）。
+2. 如無明確上限，請基於險種、常見疊加情境與條款慣例給出合理推估（並在 notes 中說明假設）。
+3. 僅在摘要已有資訊的範圍內推理，避免臆造條款。
+
+## 🧮 規則
+- 不等於 coverage 最大值；需考慮條款是否可同時觸發、是否有總限額。
+- 有明確上限則優先採用。
+- maxClaimAmount 不得為空或 0。除非條款「明文」規定無理賠/0 元，才可回傳 0，並在 notes 引用條款原文要點。
+- 若資料不足，必須提供保守估算（合理區間中偏保守值），並於 notes 清楚說明估算依據與限制。
+- maxClaimUnit 僅能為貨幣單位（元/萬元/百萬元/新台幣元/新台幣萬元），禁止任何時間/頻率或百分比字樣（/日、/次、/年、/月、日、次、年、月、天、%）。
+
+## 📤 回傳 JSON 格式（請務必滿足『單位限制』）
+{
+  "maxClaimAmount": "數字（純數字）",
+  "maxClaimUnit": "單位（限定：元/萬元/百萬元/新台幣元/新台幣萬元；禁止：/日、/次、/年、/月、日、次、年、月、天）",
+  "notes": "請務必詳盡，至少涵蓋以下 7 項：\n1) 依據條款與原文摘錄（若可，指出條號或段落標題）\n2) 可同時觸發之保障清單與互斥關係\n3) 等待期/除外/既往症對理賠的影響\n4) 將日額/次額換算為單一事故整筆金額的公式與步驟\n5) 三種情境估算（保守/基準/樂觀）與理由\n6) 不確定性來源與需補充的文件清單\n7) 綜合判斷與建議（為何採用此最高理賠數字）"
+}
+
+## ✅ 自我檢查清單
+- [ ] maxClaimUnit 不含任何時間/頻率字樣（/日、/次、年、月、天、日）。
+- [ ] 若只能得到日額或次額，已換算為單一事故最高可得之整筆金額或留空。
+- [ ] 如金額極低（例如 < 1000 元），請重新檢視推理依據，避免誤把天數或次數當金額。`;
+
+    // 使用更高容量模型以獲得更完整的 notes 與推理細節
+    const response = await this.callAPI(prompt, 'gpt-4o');
+    const result = this.parseJSONResponse(response.content);
+
+    const payload = {
+      maxClaimAmount: result.maxClaimAmount || '',
+      maxClaimUnit: result.maxClaimUnit || '元',
+      notes: result.notes || ''
+    };
+
+    try {
+      console.log('[AI] 保單推理-最高理賠');
+      console.log(`  maxClaimAmount: ${payload.maxClaimAmount}`);
+      console.log(`  maxClaimUnit  : ${payload.maxClaimUnit}`);
+      if (payload.notes) console.log(`  notes         : ${payload.notes}`);
+    } catch {}
+
+    return payload;
   }
 
   /**
@@ -1138,7 +1366,7 @@ ${policyText}
       console.error('         ❌ 保單匹配分析失敗:', error);
       return { 
         hasMatch: false, 
-        reason: `API調用失敗: ${error.message}`,
+        reason: `API調用失敗: ${error instanceof Error ? error.message : '未知錯誤'}`,
         confidenceLevel: 'none'
       };
     }
