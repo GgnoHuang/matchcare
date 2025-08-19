@@ -185,6 +185,9 @@ export default function InsuranceImportPage() {
         fileSize: 0,
         textContent: '',
         imageBase64: null,
+        // 儲存 AI 判斷的最高理賠金額
+        maxClaimAmount: analysisResult.maxClaimAmount || '',
+        maxClaimUnit: analysisResult.maxClaimUnit || '元',
         policyInfo: {
           policyBasicInfo: {
             insuranceCompany: analysisResult.company || '',

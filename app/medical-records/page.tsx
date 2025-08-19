@@ -390,7 +390,7 @@ export default function MedicalRecordsPage() {
           <Link href="/medical-records/import" className="w-full md:w-auto">
             <Button className="gap-2 bg-teal-600 hover:bg-teal-700 w-full">
               <Upload className="h-4 w-4" />
-              導入病歷
+              上傳病歷
             </Button>
           </Link>
           {/* <Link href="/medical-records/add" className="w-full md:w-auto">

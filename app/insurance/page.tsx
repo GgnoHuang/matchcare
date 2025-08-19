@@ -25,6 +25,8 @@ interface InsurancePolicy {
     unit: string
     maxDays?: number
   }>
+  maxClaimAmount: number // AI 判斷的最高理賠金額
+  maxClaimUnit: string // AI 判斷的最高理賠金額單位
   matchedRecords: number
   fileName?: string
   uploadDate?: string
@@ -102,6 +104,7 @@ export default function InsurancePage() {
       const formattedPolicies: InsurancePolicy[] = rawPolicies.map((policy, index) => {
         console.log('處理保單記錄:', policy.fileName, policy.policyInfo);
         const policyData = policy.policyInfo?.policyBasicInfo || {}
+        const coverageData = policy.policyInfo?.coverageDetails || {}
         
         // 提取保單名稱，優先使用AI識別的名稱
         let policyName = '保險保單';
@@ -129,26 +132,45 @@ export default function InsurancePage() {
           policyNumber = policyData.policyNumber;
         }
         
-        // 提取保障內容
+        // 提取保障內容 - 使用真實的 coverageDetails.coverage 資料
         let coverage = [];
-        if (policyData.coverageDetails && policyData.coverageDetails !== '待輸入') {
-          // 嘗試解析保障內容
-          try {
-            const coverageText = policyData.coverageDetails;
-            // 簡單解析，實際可能需要更複雜的邏輯
-            coverage = [
-              { type: '主要保障', amount: 100000, unit: '元' },
-              { type: '附加保障', amount: 50000, unit: '元' }
-            ];
-          } catch (e) {
-            coverage = [{ type: '保障內容處理中', amount: 0, unit: '元' }];
-          }
-        } else {
+        
+        if (coverageData.coverage && Array.isArray(coverageData.coverage)) {
+          // 將真實的保障項目資料轉換為顯示格式
+          coverage = coverageData.coverage
+            .filter(item => item.name && item.name.trim() !== '') // 只要有 name 且不是空字串
+            .map(item => ({
+              type: item.name, // 使用項目名稱
+              amount: (item.amount && item.amount.trim() !== '') ? item.amount : null, // amount 不是空字串才使用
+              unit: (item.unit && item.unit.trim() !== '') ? item.unit : null // unit 不是空字串才使用
+            }));
+        }
+        
+        // 如果沒有保障項目，顯示預設訊息
+        if (coverage.length === 0) {
           coverage = [{ type: '保障內容處理中', amount: 0, unit: '元' }];
         }
         
         // 計算匹配病歷數量（暫時設為0，後續可實作真實匹配邏輯）
         const matchedRecords = 0;
+        
+        // 提取 AI 判斷的最高理賠金額（從 AI 分析結果中取得）
+        let maxClaimAmount = 0;
+        let maxClaimUnit = '元';
+        
+        // 先嘗試從 AI 分析結果取得最高理賠金額
+        if (policy.maxClaimAmount && policy.maxClaimUnit) {
+          maxClaimAmount = parseFloat(policy.maxClaimAmount) || 0;
+          maxClaimUnit = policy.maxClaimUnit;
+        } else if (policy.analysisResult?.maxClaimAmount) {
+          // 備用：從 analysisResult 中取得
+          maxClaimAmount = parseFloat(policy.analysisResult.maxClaimAmount) || 0;
+          maxClaimUnit = policy.analysisResult.maxClaimUnit || '元';
+        } else if (coverage.length > 0) {
+          // 最後備用：使用舊方法計算最大值
+          maxClaimAmount = Math.max(...coverage.map(c => c.amount));
+          maxClaimUnit = '元';
+        }
         
         return {
           id: policy.id || `policy_${index + 1}`,
@@ -159,6 +181,8 @@ export default function InsurancePage() {
           startDate: policyData.effectiveDate || '未知',
           endDate: policyData.expiryDate || '未知', 
           coverage: coverage,
+          maxClaimAmount: maxClaimAmount, // 新增：AI 判斷的最高理賠金額
+          maxClaimUnit: maxClaimUnit, // 新增：AI 判斷的最高理賠金額單位
           matchedRecords: matchedRecords,
           fileName: policy.fileName,
           uploadDate: policy.uploadDate,
@@ -409,7 +433,13 @@ export default function InsurancePage() {
                       <p className="text-sm text-gray-500">
                         {policy.coverage
                           .slice(0, 2)
-                          .map((c) => `${c.type} ${c.amount.toLocaleString()}${c.unit}`)
+                          .map((c) => {
+                            let display = c.type;
+                            if (c.amount !== null && c.unit !== null) {
+                              display += ` ${c.amount}${c.unit}`;
+                            }
+                            return display;
+                          })
                           .join(", ")}
                         {policy.coverage.length > 2 ? "..." : ""}
                       </p>
@@ -420,7 +450,7 @@ export default function InsurancePage() {
                     <div>
                       <p className="text-sm font-medium">最高理賠金額</p>
                       <p className="text-sm text-gray-500">
-                        {Math.max(...policy.coverage.map((c) => c.amount)).toLocaleString()} 元
+                        {policy.maxClaimAmount.toLocaleString()}{policy.maxClaimUnit}
                       </p>
                     </div>
                   </div>
@@ -529,7 +559,13 @@ export default function InsurancePage() {
                         <p className="text-sm text-gray-500">
                           {policy.coverage
                             .slice(0, 2)
-                            .map((c) => `${c.type} ${c.amount.toLocaleString()}${c.unit}`)
+                            .map((c) => {
+                            let display = c.type;
+                            if (c.amount !== null && c.unit !== null) {
+                              display += ` ${c.amount}${c.unit}`;
+                            }
+                            return display;
+                          })
                             .join(", ")}
                           {policy.coverage.length > 2 ? "..." : ""}
                         </p>
@@ -647,7 +683,13 @@ export default function InsurancePage() {
                         <p className="text-sm text-gray-500">
                           {policy.coverage
                             .slice(0, 2)
-                            .map((c) => `${c.type} ${c.amount.toLocaleString()}${c.unit}`)
+                            .map((c) => {
+                            let display = c.type;
+                            if (c.amount !== null && c.unit !== null) {
+                              display += ` ${c.amount}${c.unit}`;
+                            }
+                            return display;
+                          })
                             .join(", ")}
                           {policy.coverage.length > 2 ? "..." : ""}
                         </p>
@@ -765,7 +807,13 @@ export default function InsurancePage() {
                         <p className="text-sm text-gray-500">
                           {policy.coverage
                             .slice(0, 2)
-                            .map((c) => `${c.type} ${c.amount.toLocaleString()}${c.unit}`)
+                            .map((c) => {
+                            let display = c.type;
+                            if (c.amount !== null && c.unit !== null) {
+                              display += ` ${c.amount}${c.unit}`;
+                            }
+                            return display;
+                          })
                             .join(", ")}
                           {policy.coverage.length > 2 ? "..." : ""}
                         </p>
