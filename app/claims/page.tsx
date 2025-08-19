@@ -281,9 +281,7 @@ export default function ClaimsPage() {
                 <p className="text-gray-500 mb-4">
                   您目前沒有任何理賠申請記錄，點擊下方按鈕開始您的第一個理賠申請
                 </p>
-                <Link href="/claims/new">
-                  <Button>建立理賠申請</Button>
-                </Link>
+              
               </CardContent>
             </Card>
           )}

@@ -302,24 +302,26 @@ export default function InsurancePage() {
           <p className="text-gray-500 mt-1 text-sm md:text-base">智能分析您的保險保單並匹配最佳理賠方案</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/insurance/import-passbook" className="w-full sm:w-auto">
+          {/* 隱藏從保險存摺導入按鈕 */}
+          {/* <Link href="/insurance/import-passbook" className="w-full sm:w-auto">
             <Button className="gap-2 bg-blue-600 hover:bg-blue-700 w-full sm:w-auto">
               <BookOpen className="h-4 w-4" />
               從保險存摺導入
             </Button>
-          </Link>
+          </Link> */}
           <Link href="/insurance/import" className="w-full sm:w-auto">
             <Button className="gap-2 bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
               <Upload className="h-4 w-4" />
-              導入保單
+              上傳保單
             </Button>
           </Link>
-          <Link href="/insurance/add" className="w-full sm:w-auto">
+          {/* 隱藏手動添加按鈕 */}
+          {/* <Link href="/insurance/add" className="w-full sm:w-auto">
             <Button variant="outline" className="gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
               手動添加
             </Button>
-          </Link>
+          </Link> */}
         </div>
       </div>
 
@@ -451,12 +453,7 @@ export default function InsurancePage() {
                   請先上傳您的保險保單文件，上傳後將在這裡顯示並進行AI分析
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                  <Link href="/my-data">
-                    <Button className="bg-teal-600 hover:bg-teal-700">前往上傳保單</Button>
-                  </Link>
-                  <Link href="/insurance/import">
-                    <Button variant="outline">批量導入保單</Button>
-                  </Link>
+                 
                 </div>
               </CardContent>
             </Card>
@@ -575,9 +572,7 @@ export default function InsurancePage() {
                   <p className="text-gray-500 mb-4">
                     您目前沒有醫療險保單，建議上傳醫療險保單以獲得更好的醫療保障
                   </p>
-                  <Link href="/my-data">
-                    <Button className="bg-teal-600 hover:bg-teal-700">前往上傳保單</Button>
-                  </Link>
+               
                 </CardContent>
               </Card>
             )}
@@ -695,9 +690,7 @@ export default function InsurancePage() {
                   <p className="text-gray-500 mb-4">
                     您目前沒有重大疾病險保單，建議上傳以獲得重大疾病的保障
                   </p>
-                  <Link href="/my-data">
-                    <Button className="bg-teal-600 hover:bg-teal-700">前往上傳保單</Button>
-                  </Link>
+              
                 </CardContent>
               </Card>
             )}
@@ -815,9 +808,7 @@ export default function InsurancePage() {
                   <p className="text-gray-500 mb-4">
                     您目前沒有意外傷害險保單，建議上傳以獲得意外事故的保障
                   </p>
-                  <Link href="/my-data">
-                    <Button className="bg-teal-600 hover:bg-teal-700">前往上傳保單</Button>
-                  </Link>
+           
                 </CardContent>
               </Card>
             )}

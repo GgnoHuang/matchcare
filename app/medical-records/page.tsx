@@ -385,30 +385,7 @@ export default function MedicalRecordsPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">病歷管理</h1>
           <p className="text-gray-500 mt-1 text-sm md:text-base">管理您的醫療記錄並查看保險理賠資格</p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            onClick={async () => {
-              console.log('手動重新載入病歷資料...')
-              if (user?.id) {
-                const storageKey = `matchcare_${user.id}_medical_records`
-                const data = localStorage.getItem(storageKey)
-                console.log('手動檢查 localStorage:', storageKey, data)
-                
-                const rawRecords = await userDataService.getMedicalRecords(user.id)
-                console.log('手動調用 userDataService:', rawRecords)
-                
-                // 重新載入數據
-                await loadUserMedicalRecords()
-              } else {
-                console.log('用戶未登入，無法重新載入')
-              }
-            }}
-            variant="outline" 
-            className="gap-2"
-          >
-            🔄 調試重載
-          </Button>
-        </div>
+      
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
           <Link href="/medical-records/import" className="w-full md:w-auto">
             <Button className="gap-2 bg-teal-600 hover:bg-teal-700 w-full">
@@ -416,12 +393,12 @@ export default function MedicalRecordsPage() {
               導入病歷
             </Button>
           </Link>
-          <Link href="/medical-records/add" className="w-full md:w-auto">
+          {/* <Link href="/medical-records/add" className="w-full md:w-auto">
             <Button variant="outline" className="gap-2 w-full">
               <Plus className="h-4 w-4" />
               手動添加
             </Button>
-          </Link>
+          </Link> */}
         </div>
       </div>
 
@@ -580,9 +557,7 @@ export default function MedicalRecordsPage() {
                   <p className="text-gray-500 mb-4">
                     請到「我的資料」頁面上傳您的病歷記錄，上傳後將在這裡顯示
                   </p>
-                  <Link href="/my-data">
-                    <Button>前往上傳病歷</Button>
-                  </Link>
+               
                 </CardContent>
               </Card>
             )}

@@ -116,7 +116,6 @@ export function MainNav() {
     { href: "/", label: "首頁" },
     { href: "/insurance", label: "保單總覽" },
     { href: "/medical-records", label: "病歷管理" },
-    { href: "/my-data", label: "我的資料" },
     { href: "/resources", label: "其他福利資源" },
   ]
 
@@ -219,6 +218,7 @@ export function MainNav() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>我的帳號</DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => router.push("/my-data")}>我的資料</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => router.push("/profile")}>個人資料</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => router.push("/settings")}>帳號設定</DropdownMenuItem>
                   {/* <DropdownMenuItem onClick={() => router.push("/settings/subscription")}>訂閱管理</DropdownMenuItem> */}
@@ -313,6 +313,9 @@ export function MainNav() {
                     <User className="h-4 w-4 text-gray-500" />
                     <span className="text-sm font-medium">{user.name}</span>
                   </div>
+                  <Button variant="outline" size="sm" onClick={() => router.push("/my-data")}>
+                    我的資料
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => router.push("/profile")}>
                     個人資料
                   </Button>
