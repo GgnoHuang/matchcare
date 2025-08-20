@@ -831,16 +831,36 @@ export default function ResourceDetailPage({ params }) {
               <div className="space-y-4">
                 <div className="flex items-start gap-2">
                   <Globe className="h-5 w-5 text-gray-500 mt-0.5" />
-                  <div>
-                    <p className="font-medium">官方網站</p>
-                    <a
-                      href={resource.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      {resource.website}
-                    </a>
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      {resource.websites && resource.websites.length > 1 ? "相關網站" : "官方網站"}
+                    </p>
+                    <div className="space-y-1">
+                      {resource.websites && resource.websites.length > 0 ? (
+                        resource.websites.map((website, index) => (
+                          <a
+                            key={index}
+                            href={website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline block text-sm break-all"
+                          >
+                            {website}
+                          </a>
+                        ))
+                      ) : resource.website ? (
+                        <a
+                          href={resource.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline block text-sm break-all"
+                        >
+                          {resource.website}
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 text-sm">暫無網站資訊</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">

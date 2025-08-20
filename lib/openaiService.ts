@@ -1664,8 +1664,25 @@ ${policyText}
   /**
    * 第二階段：政府資源精準搜尋
    */
-  async searchGovernmentResources(searchTerm: string, costInfo: any): Promise<any[]> {
+  async oldSearchGovernmentResources(searchTerm: string, costInfo: any): Promise<any[]> {
     const prompt = `你是台灣政府醫療資源專家。針對「${searchTerm}」，請基於你的知識庫提供相關的政府補助資源。
+
+## 🔍 智能搜尋策略
+
+### 1. 醫療程序/治療/場景基礎分析
+- 當用戶輸入醫療程序（如：開刀、化療、復健）→ 分析對應的常見疾病類型
+- 當用戶輸入治療場景（如：住院、門診、長照）→ 匹配相關補助類型
+- 當用戶輸入特定疾病→ 直接匹配專病補助
+
+### 2. 搜索詞分類邏輯
+- **過於狹窄**：單一症狀 → 拓展至相關疾病群組
+- **過於廣泛**：一般醫療 → 聚焦於高需求補助項目
+- **適中範圍**：特定疾病或治療 → 直接精準匹配
+
+### 3. 搜尋優先級
+1. **高優先級**：健保重大傷病、罕見疾病、身心障礙
+2. **中優先級**：縣市醫療補助、特定疾病專案
+3. **低優先級**：一般性醫療費用減免
 
 ## ⚠️ 重要原則
 - 只提供你確實知道存在的具體政府資源
@@ -1674,10 +1691,11 @@ ${policyText}
 - 優先提供大框架的補助類型和方向指引
 
 ## 🎯 搜尋重點
-1. **健保制度框架**：是否有健保給付、特材給付
-2. **已知的重大補助**：重大傷病、罕見疾病等
-3. **申請方向指引**：應該向哪類機關申請
-4. **一般性補助資訊**：縣市政府常見的醫療補助
+1. **健保制度框架**：是否有健保給付、特材給付、重大傷病卡
+2. **已知的重大補助**：重大傷病、罕見疾病、身心障礙
+3. **中央政府資源**：衛福部、勞動部、原民會等專案補助
+4. **地方政府資源**：縣市政府社會局醫療補助
+5. **慈善基金會**：如慈濟基金會、陽光基金會等知名機構
 
 ## 📋 回傳格式
 {
@@ -1686,19 +1704,72 @@ ${policyText}
       "title": "補助名稱（如：健保重大傷病給付）",
       "organization": "確定的機關名稱（如：衛生福利部中央健康保險署）或「建議洽詢相關單位」",
       "category": "政府補助",
-      "subcategory": "中央/地方/健保",
-      "eligibility": "一般性申請條件說明",
-      "amount": "已知的補助範圍或「依個案評估」",
-      "deadline": "常年受理或「請洽詢主管機關」",
-      "details": "補助內容說明，明確標示哪些是推測性資訊",
+      "subcategory": "中央/地方/健保/慈善",
+      "eligibility": "具體申請條件說明，包含收入限制、疾病條件、身份要求等",
+      "amount": "具體補助金額範圍或比例（如：每月最高3萬元、醫療費用80%等），如不確定則註明「依個案評估」",
+      "deadline": "申請期限說明（如：常年受理、事故發生後30天內、每年3-5月申請等）",
+      "details": "補助內容詳細說明，包含給付項目、使用限制、注意事項等",
       "priority": "high/medium/low",
       "status": "eligible/conditional",
-      "applicationProcess": "一般性申請指引",
-      "contactInfo": "1957福利諮詢專線或具體已知的聯絡方式",
-      "website": "已知的官方網址或建議搜尋關鍵字"
+      "applicationProcess": "詳細申請流程，包含所需文件、申請地點、審核時間等",
+      "contactInfo": "具體聯絡方式：電話號碼、地址或1957福利諮詢專線",
+      "websites": ["官方網址1", "相關資訊網址2", "申請表單網址3"]
     }
   ]
 }
+以下是範本，我搜尋的關鍵字為：“達文西手術”
+用戶輸入的關鍵字格式為：「 醫療行為or 治療方式 or情境（例如:80歲老人跌倒導致骨折、3歲嬰兒因為保母照顧不周導致肺部感染）」，此關鍵字用來搜尋相關台灣國內補助和補助資源（企業、政府、社會福利...等）， 透過ai的專業知識以及搜尋能力幫我找到 ，如果此醫療行為或症狀太過狹隘或資訊不足，那也請思考並幫我歸類此醫療行為，透過概括的方式去查找，我希望得到以下幾個關鍵欄位 1.申請資格（例如ＸＸ員工，台灣公民，ＹＹ成員..等） 2.補助/理賠金額 3.申請期限(例如：常年受理) 基本描述（例如：針對罹患重大疾病的台積電正職員工，提供醫療費用補助、有薪病假等福利） 4.相關連結（申請的網站為優先）
+如果查找與思考後的資料為（以達文西手術為例）：
+社會福利／民間補助：慈濟基金會醫療補助（全台受理，社工評估）
+1. 申請資格 居住台灣地區、因病或重大事故導致經濟困難的個人／家庭；需提供基本資料與經濟狀況證明，經社工訪視評估。 tw.tzuchi.org tzhchi.my.salesforce-sites.com
+2.補助／理賠金額 不詳／個案評估（可涵蓋醫療費、醫療器材耗材、健保費、就醫交通等類別，金額依審核結果核定）。 tw.tzuchi.org
+3.申請期限＋基本描述 常年受理；屬急難／醫療補助，走個案審核流程，建議先由醫院社工或本人向就近慈濟社服組聯繫啟動。 tw.tzuchi.org
+4.相關連結(多筆)（開頭一定要給我https的）
+https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.com
+https://tzhchi.my.salesforce-sites.com/linewebhook/FAQ?Common=Y&sub=U91c58760985209a37b23fdf3eb5f0dd1&utm_source=chatgpt.com
+https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.com
+那麼請給我輸出格式如下
+{
+“title”: “慈濟基金會醫療補助“,
+“organization”: “佛教慈濟慈善事業基金會“,
+“category”: “社會福利“,
+“subcategory”: “慈善團體“,
+“eligibility”: “居住台灣、因病或重大事故導致經濟困難的個人／家庭；需提供基本資料與經濟狀況證明，經社工訪視評估。“,
+“amount”: “依個案評估（可涵蓋醫療費、耗材費、健保費、交通費等）。“,
+“deadline”: “常年受理“,
+“details”: “屬急難/醫療補助，經社工評估後依需求核定補助內容與金額。金額範圍無公開數據。“,
+“priority”: “medium”,
+“status”: “conditional”,
+“applicationProcess”: “可透過醫院社工或直接聯繫慈濟社服組提出申請，需提交財力及病情資料。“,
+“contactInfo”: “慈濟基金會服務專線 03-826-6779（總會）“,
+“website”: [“https://tw.tzuchi.org.tw/”,“https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.com”]
+}
+
+## 🌟 參考範例 - 慈濟基金會醫療補助
+{
+  "title": "慈濟基金會急難醫療補助",
+  "organization": "佛教慈濟慈善事業基金會",
+  "category": "慈善補助",
+  "subcategory": "慈善",
+  "eligibility": "1.低收入戶或中低收入戶 2.醫療費用超過家庭收入負擔能力 3.非健保給付之自費醫療項目 4.須經社工評估認定",
+  "amount": "依個案評估，最高補助金額視實際需求而定，通常為醫療費用的部分比例",
+  "deadline": "常年受理申請，建議於醫療費用產生後儘速申請",
+  "details": "補助範圍包含住院醫療費、手術費、藥品費等健保未給付項目。需經慈濟志工實地訪視評估，補助金額依家庭經濟狀況核定。",
+  "priority": "medium",
+  "status": "conditional",
+  "applicationProcess": "1.填寫申請表 2.檢附診斷證明書、醫療費用收據 3.提供收入證明、戶籍資料 4.等候志工家訪評估 5.基金會審核決議",
+  "contactInfo": "慈濟全台各地聯絡處，或撥打慈濟專線(02)2898-9000",
+  "websites": [
+    "https://www.tzuchi.org.tw/",
+    "https://www.tzuchi.org.tw/index.php?option=com_content&view=article&id=1234",
+    "https://forms.tzuchi.org.tw/medical-aid"
+  ]
+}
+
+## 📊 品質確認標準
+- **準確性檢查**：確認機構名稱、聯絡方式、補助範圍的準確性
+- **時效性注意**：標註可能已變更的政策或金額
+- **完整性評估**：確保申請條件、流程、所需文件資訊完整
 
 範例回應思維：
 - ✅ 好：「健保重大傷病給付」「衛生福利部」
@@ -1717,6 +1788,162 @@ ${policyText}
       return [];
     }
   }
+
+
+ async searchGovernmentResources(searchTerm: string, costInfo: any): Promise<any[]> {
+    const prompt = `你是台灣政府醫療資源專家。針對「${searchTerm}」，請基於你的知識庫提供相關的政府補助資源。
+
+## 🔍 智能搜尋策略
+
+### 1. 醫療程序/治療/場景基礎分析
+- 當用戶輸入醫療程序（如：開刀、化療、復健）→ 分析對應的常見疾病類型
+- 當用戶輸入治療場景（如：住院、門診、長照）→ 匹配相關補助類型
+- 當用戶輸入特定疾病→ 直接匹配專病補助
+
+### 2. 搜索詞分類邏輯
+- **過於狹窄**：單一症狀 → 拓展至相關疾病群組
+- **過於廣泛**：一般醫療 → 聚焦於高需求補助項目
+- **適中範圍**：特定疾病或治療 → 直接精準匹配
+
+### 3. 搜尋優先級
+1. **高優先級**：健保重大傷病、罕見疾病、身心障礙
+2. **中優先級**：縣市醫療補助、特定疾病專案
+3. **低優先級**：一般性醫療費用減免
+
+## ⚠️ 重要原則
+- 只提供你確實知道存在的具體政府資源
+- 如果不確定具體機構名稱，請使用「建議洽詢相關單位」
+- 不要編造「某醫院」、「某機構」等模糊名稱
+- 優先提供大框架的補助類型和方向指引
+
+## 🎯 搜尋重點
+1. **健保制度框架**：是否有健保給付、特材給付、重大傷病卡
+2. **已知的重大補助**：重大傷病、罕見疾病、身心障礙
+3. **中央政府資源**：衛福部、勞動部、原民會等專案補助
+4. **地方政府資源**：縣市政府社會局醫療補助
+5. **慈善基金會**：如慈濟基金會、陽光基金會等知名機構
+
+## 📋 回傳格式
+{
+  "resources": [
+    {
+      "title": "補助名稱（如：健保重大傷病給付）",
+      "organization": "確定的機關名稱（如：衛生福利部中央健康保險署）或「建議洽詢相關單位」",
+      "category": "政府補助",
+      "subcategory": "中央/地方/健保/慈善",
+      "eligibility": "具體申請條件說明，包含收入限制、疾病條件、身份要求等",
+      "amount": "具體補助金額範圍或比例（如：每月最高3萬元、醫療費用80%等），如不確定則註明「依個案評估」",
+      "deadline": "申請期限說明（如：常年受理、事故發生後30天內、每年3-5月申請等）",
+      "details": "補助內容詳細說明，包含給付項目、使用限制、注意事項等",
+      "priority": "high/medium/low",
+      "status": "eligible/conditional",
+      "applicationProcess": "詳細申請流程，包含所需文件、申請地點、審核時間等",
+      "contactInfo": "具體聯絡方式：電話號碼、地址或1957福利諮詢專線",
+      "websites": ["官方網址1", "相關資訊網址2", "申請表單網址3"]
+    }
+  ]
+}
+以下是範本，我搜尋的關鍵字為：“達文西手術”
+用戶輸入的關鍵字格式為：「 醫療行為or 治療方式 or情境（例如:80歲老人跌倒導致骨折、3歲嬰兒因為保母照顧不周導致肺部感染）」，此關鍵字用來搜尋相關台灣國內補助和補助資源（企業、政府、社會福利...等）， 透過ai的專業知識以及搜尋能力幫我找到 ，如果此醫療行為或症狀太過狹隘或資訊不足，那也請思考並幫我歸類此醫療行為，透過概括的方式去查找，我希望得到以下幾個關鍵欄位 1.申請資格（例如ＸＸ員工，台灣公民，ＹＹ成員..等） 2.補助/理賠金額 3.申請期限(例如：常年受理) 基本描述（例如：針對罹患重大疾病的台積電正職員工，提供醫療費用補助、有薪病假等福利） 4.相關連結（申請的網站為優先）
+如果查找與思考後的資料為（以達文西手術為例）：
+社會福利／民間補助：慈濟基金會醫療補助（全台受理，社工評估）
+1. 申請資格 居住台灣地區、因病或重大事故導致經濟困難的個人／家庭；需提供基本資料與經濟狀況證明，經社工訪視評估。 tw.tzuchi.org tzhchi.my.salesforce-sites.com
+2.補助／理賠金額 不詳／個案評估（可涵蓋醫療費、醫療器材耗材、健保費、就醫交通等類別，金額依審核結果核定）。 tw.tzuchi.org
+3.申請期限＋基本描述 常年受理；屬急難／醫療補助，走個案審核流程，建議先由醫院社工或本人向就近慈濟社服組聯繫啟動。 tw.tzuchi.org
+4.相關連結(多筆)（開頭一定要給我https的）
+https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.com
+https://tzhchi.my.salesforce-sites.com/linewebhook/FAQ?Common=Y&sub=U91c58760985209a37b23fdf3eb5f0dd1&utm_source=chatgpt.com
+https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.com
+那麼請給我輸出格式如下
+{
+“title”: “慈濟基金會醫療補助“,
+“organization”: “佛教慈濟慈善事業基金會“,
+“category”: “社會福利“,
+“subcategory”: “慈善團體“,
+“eligibility”: “居住台灣、因病或重大事故導致經濟困難的個人／家庭；需提供基本資料與經濟狀況證明，經社工訪視評估。“,
+“amount”: “依個案評估（可涵蓋醫療費、耗材費、健保費、交通費等）。“,
+“deadline”: “常年受理“,
+“details”: “屬急難/醫療補助，經社工評估後依需求核定補助內容與金額。金額範圍無公開數據。“,
+“priority”: “medium”,
+“status”: “conditional”,
+“applicationProcess”: “可透過醫院社工或直接聯繫慈濟社服組提出申請，需提交財力及病情資料。“,
+“contactInfo”: “慈濟基金會服務專線 03-826-6779（總會）“,
+“website”: [“https://tw.tzuchi.org.tw/”,“https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.com”]
+}
+
+## 🌟 參考範例 - 慈濟基金會醫療補助
+{
+  "title": "慈濟基金會急難醫療補助",
+  "organization": "佛教慈濟慈善事業基金會",
+  "category": "慈善補助",
+  "subcategory": "慈善",
+  "eligibility": "1.低收入戶或中低收入戶 2.醫療費用超過家庭收入負擔能力 3.非健保給付之自費醫療項目 4.須經社工評估認定",
+  "amount": "依個案評估，最高補助金額視實際需求而定，通常為醫療費用的部分比例",
+  "deadline": "常年受理申請，建議於醫療費用產生後儘速申請",
+  "details": "補助範圍包含住院醫療費、手術費、藥品費等健保未給付項目。需經慈濟志工實地訪視評估，補助金額依家庭經濟狀況核定。",
+  "priority": "medium",
+  "status": "conditional",
+  "applicationProcess": "1.填寫申請表 2.檢附診斷證明書、醫療費用收據 3.提供收入證明、戶籍資料 4.等候志工家訪評估 5.基金會審核決議",
+  "contactInfo": "慈濟全台各地聯絡處，或撥打慈濟專線(02)2898-9000",
+  "websites": [
+    "https://www.tzuchi.org.tw/",
+    "https://www.tzuchi.org.tw/index.php?option=com_content&view=article&id=1234",
+    "https://forms.tzuchi.org.tw/medical-aid"
+  ]
+}
+
+## 📊 品質確認標準
+- **準確性檢查**：確認機構名稱、聯絡方式、補助範圍的準確性
+- **時效性注意**：標註可能已變更的政策或金額
+- **完整性評估**：確保申請條件、流程、所需文件資訊完整
+
+範例回應思維：
+- ✅ 好：「健保重大傷病給付」「衛生福利部」
+- ❌ 避免：「某大型醫院提供的補助」「某基金會」
+- ✅ 好：「建議洽詢戶籍地縣市政府社會局」
+- ❌ 避免：「某縣市政府提供」
+
+如果找不到相關政府資源，請回傳空陣列。`;
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o-mini');
+      const result = this.parseJSONResponse(response.content);
+      return this.formatNetworkResources(result.resources || [], 'government');
+    } catch (error) {
+      console.error('政府資源搜尋失敗:', error);
+      return [];
+    }
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   /**
    * 第三階段：金融產品精準搜尋
@@ -1913,24 +2140,35 @@ ${policyText}
    * 格式化網路搜尋的資源資料
    */
   private formatNetworkResources(resources: any[], sourceType?: string): any[] {
-    return resources.map((resource, index) => ({
-      id: `${sourceType || 'network'}-${Date.now()}-${index}`,
-      category: resource.category || '其他資源',
-      subcategory: resource.subcategory || '',
-      title: resource.title || '',
-      organization: resource.organization || '',
-      eligibility: resource.eligibility || '',
-      amount: resource.amount || '',
-      deadline: resource.deadline || '',
-      matchedConditions: [],
-      details: resource.details || '',
-      priority: resource.priority || 'medium',
-      status: resource.status || 'eligible',
-      contactInfo: resource.contactInfo || '',
-      website: resource.website || '',
-      applicationProcess: resource.applicationProcess || '',
-      sourceType: sourceType || 'network'
-    }));
+    return resources.map((resource, index) => {
+      // 處理 websites 陣列格式（新）或 website 單一字串格式（舊）
+      let websites = [];
+      if (resource.websites && Array.isArray(resource.websites)) {
+        websites = resource.websites;
+      } else if (resource.website) {
+        websites = [resource.website];
+      }
+      
+      return {
+        id: `${sourceType || 'network'}-${Date.now()}-${index}`,
+        category: resource.category || '其他資源',
+        subcategory: resource.subcategory || '',
+        title: resource.title || '',
+        organization: resource.organization || '',
+        eligibility: resource.eligibility || '',
+        amount: resource.amount || '',
+        deadline: resource.deadline || '',
+        matchedConditions: [],
+        details: resource.details || '',
+        priority: resource.priority || 'medium',
+        status: resource.status || 'eligible',
+        contactInfo: resource.contactInfo || '',
+        website: websites.length > 0 ? websites[0] : '', // 保持向後兼容，取第一個網址
+        websites: websites, // 新增 websites 陣列
+        applicationProcess: resource.applicationProcess || '',
+        sourceType: sourceType || 'network'
+      };
+    });
   }
 
   /**
