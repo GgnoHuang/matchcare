@@ -134,22 +134,30 @@ export default function MedicalRecordsImportPage() {
       const recordData = {
         id: generateId(),
         fileName: 'ai_analyzed',
-        fileType: 'auto',
+        fileType: 'pdf' as const,
         documentType: 'medical' as const,
         uploadDate: new Date().toISOString(),
         fileSize: 0,
         textContent: '',
-        imageBase64: null,
+        imageBase64: undefined,
         medicalInfo: {
-          hospital: extractedData.hospital,
-          department: extractedData.department,
-          doctor: extractedData.doctor,
-          visitDate: extractedData.visitDate,
-          diagnosis: extractedData.diagnosis,
-          treatment: extractedData.treatment,
-          medication: extractedData.medication,
-          medicalExam: extractedData.medicalExam,
-          isFirstOccurrence: extractedData.isFirstOccurrence
+          clinicalRecord: extractedData.diagnosis || extractedData.medicalExam || '',
+          admissionRecord: extractedData.diagnosis || '',
+          examinationReport: extractedData.medicalExam || '',
+          medicationRecord: extractedData.medication || '',
+          hospitalStamp: extractedData.hospital || '',
+          // 保留原始資料以便後續使用
+          _originalData: {
+            hospital: extractedData.hospital,
+            department: extractedData.department,
+            doctor: extractedData.doctor,
+            visitDate: extractedData.visitDate,
+            diagnosis: extractedData.diagnosis,
+            treatment: extractedData.treatment,
+            medication: extractedData.medication,
+            medicalExam: extractedData.medicalExam,
+            isFirstOccurrence: extractedData.isFirstOccurrence
+          }
         }
       }
       
@@ -174,22 +182,30 @@ export default function MedicalRecordsImportPage() {
       const recordData = {
         id: generateId(),
         fileName: 'manual_input',
-        fileType: 'manual',
+        fileType: 'pdf' as const,
         documentType: 'medical' as const,
         uploadDate: new Date().toISOString(),
         fileSize: 0,
         textContent: '',
-        imageBase64: null,
+        imageBase64: undefined,
         medicalInfo: {
-          hospital: formData.hospital,
-          department: formData.department,
-          doctor: formData.doctor,
-          visitDate: formData.visitDate ? format(formData.visitDate, "yyyy-MM-dd") : "",
-          medicalExam: formData.medicalExam,
-          diagnosis: formData.diagnosis,
-          treatment: formData.treatment,
-          medication: formData.medication,
-          isFirstOccurrence: formData.isFirstOccurrence
+          clinicalRecord: formData.diagnosis || formData.medicalExam || '',
+          admissionRecord: formData.diagnosis || '',
+          examinationReport: formData.medicalExam || '',
+          medicationRecord: formData.medication || '',
+          hospitalStamp: formData.hospital || '',
+          // 保留原始資料以便後續使用
+          _originalData: {
+            hospital: formData.hospital,
+            department: formData.department,
+            doctor: formData.doctor,
+            visitDate: formData.visitDate ? format(formData.visitDate, "yyyy-MM-dd") : "",
+            medicalExam: formData.medicalExam,
+            diagnosis: formData.diagnosis,
+            treatment: formData.treatment,
+            medication: formData.medication,
+            isFirstOccurrence: formData.isFirstOccurrence
+          }
         }
       }
       

@@ -228,6 +228,7 @@ export default function MyDataPage() {
         setUploadSuccess(`AI 分析失敗，正在儲存病歷檔案 "${fileData.filename}"...`)
       }
 
+      // 將 AI 分析結果轉換為 MedicalRecord 格式
       const record: MedicalRecord = {
         id: generateId(),
         fileName: fileData.filename,
@@ -237,7 +238,13 @@ export default function MyDataPage() {
         fileSize: fileData.size,
         textContent: fileData.text,
         imageBase64: fileData.base64,
-        medicalInfo: analyzedData
+        medicalInfo: {
+          clinicalRecord: analyzedData?.diagnosis || analyzedData?.medicalExam || '',
+          admissionRecord: analyzedData?.diagnosis || '',
+          examinationReport: analyzedData?.diagnosis || '',
+          medicationRecord: analyzedData?.medication || '',
+          hospitalStamp: analyzedData?.hospital || ''
+        }
       }
 
       await userDataService.saveMedicalRecord(user.id, record)

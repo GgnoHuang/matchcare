@@ -165,34 +165,32 @@ function AIResourcesPage() {
       if (savedMedicalRecords.length > 0) {
         combinedMedicalData += '=== 已保存的病歷記錄 ===\n'
         savedMedicalRecords.forEach((record, index) => {
-          if (record.analysisResult) {
-            combinedMedicalData += `病歷 ${index + 1}:\n`
-            combinedMedicalData += `- 病症: ${record.analysisResult.primaryCondition || '未知'}\n`
-            combinedMedicalData += `- 診斷: ${record.analysisResult.diagnosis || '未知'}\n`
-            combinedMedicalData += `- 就醫日期: ${record.analysisResult.visitDate || '未知'}\n`
-            combinedMedicalData += `- 醫院: ${record.analysisResult.hospital || '未知'}\n`
-            if (record.analysisResult.medications) {
-              combinedMedicalData += `- 用藥: ${record.analysisResult.medications}\n`
-            }
-            combinedMedicalData += '\n'
+          const medicalInfo = (record.medicalInfo as any) || {}
+          combinedMedicalData += `病歷 ${index + 1}:\n`
+          combinedMedicalData += `- 病症: ${medicalInfo.clinicalRecord || medicalInfo._originalData?.diagnosis || '未知'}\n`
+          combinedMedicalData += `- 診斷: ${medicalInfo.clinicalRecord || medicalInfo._originalData?.diagnosis || '未知'}\n`
+          combinedMedicalData += `- 就醫日期: ${medicalInfo._originalData?.visitDate || record.uploadDate || '未知'}\n`
+          combinedMedicalData += `- 醫院: ${medicalInfo.hospitalStamp || medicalInfo._originalData?.hospital || '未知'}\n`
+          if (medicalInfo.medicationRecord || medicalInfo._originalData?.medication) {
+            combinedMedicalData += `- 用藥: ${medicalInfo.medicationRecord || medicalInfo._originalData?.medication}\n`
           }
+          combinedMedicalData += '\n'
         })
       }
 
       if (savedDiagnosisCertificates.length > 0) {
         combinedMedicalData += '=== 已保存的診斷證明 ===\n'
         savedDiagnosisCertificates.forEach((cert, index) => {
-          if (cert.analysisResult) {
-            combinedMedicalData += `診斷證明 ${index + 1}:\n`
-            combinedMedicalData += `- 主診斷: ${cert.analysisResult.primaryDiagnosis || '未知'}\n`
-            combinedMedicalData += `- 診斷日期: ${cert.analysisResult.diagnosisDate || '未知'}\n`
-            combinedMedicalData += `- 醫師: ${cert.analysisResult.doctorName || '未知'}\n`
-            combinedMedicalData += `- 醫院: ${cert.analysisResult.hospitalName || '未知'}\n`
-            if (cert.analysisResult.treatmentPlan) {
-              combinedMedicalData += `- 治療計劃: ${cert.analysisResult.treatmentPlan}\n`
-            }
-            combinedMedicalData += '\n'
+          const diagnosisInfo = (cert.diagnosisInfo as any) || {}
+          combinedMedicalData += `診斷證明 ${index + 1}:\n`
+          combinedMedicalData += `- 主診斷: ${diagnosisInfo.diseaseName || diagnosisInfo._originalData?.diseaseName || '未知'}\n`
+          combinedMedicalData += `- 診斷日期: ${diagnosisInfo.certificateDate || diagnosisInfo._originalData?.certificateDate || '未知'}\n`
+          combinedMedicalData += `- 醫師: ${diagnosisInfo._originalData?.doctor || '未知'}\n`
+          combinedMedicalData += `- 醫院: ${diagnosisInfo._originalData?.hospital || '未知'}\n`
+          if (diagnosisInfo.treatmentSummary || diagnosisInfo._originalData?.treatmentSummary) {
+            combinedMedicalData += `- 治療計劃: ${diagnosisInfo.treatmentSummary || diagnosisInfo._originalData?.treatmentSummary}\n`
           }
+          combinedMedicalData += '\n'
         })
       }
 
@@ -251,8 +249,13 @@ function AIResourcesPage() {
       }
       
       // 如果完全沒有醫療資料，提供基本提示
-      if (!finalMedicalText.trim()) {
-        finalMedicalText = "請根據上傳的醫療文件圖片進行分析"
+      if (!finalMedicalText.trim() || finalMedicalText === '') {
+        finalMedicalText = "請根據上傳的醫療文件圖片進行分析。如果沒有具體的醫療內容，請基於常見的醫療情況提供一般性的資源建議。"
+      }
+      
+      // 確保有足夠的內容供 AI 分析
+      if (finalMedicalText.length < 50) {
+        finalMedicalText += "\n\n請基於以上資訊和您對台灣醫療體系的了解，提供相關的醫療資源建議。"
       }
 
       console.log('🔄 整合的醫療資料長度:', finalMedicalText.length)
@@ -724,27 +727,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
             <div className="space-y-6 mb-8">
               {/* AI 真實分析設定 */}
                 <div className="space-y-4">
-                  {/* API Key 狀態提示 */}
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <Key className="h-5 w-5 text-blue-600" />
-                        <div>
-                          <h3 className="font-medium">OpenAI API Key</h3>
-                          {apiKey ? (
-                            <p className="text-sm text-green-600">✓ 已設定API Key</p>
-                          ) : (
-                            <p className="text-sm text-red-600">
-                              ⚠️ 尚未設定API Key - 
-                              <Link href="/settings" className="text-blue-600 hover:underline ml-1">
-                                前往設定頁面
-                              </Link>
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  
 
                   {/* 病歷檔案選擇區域 */}
                   <FileSelector

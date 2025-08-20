@@ -12,7 +12,8 @@
       "Bash(npm install:*)",
       "Bash(npm run build:*)",
       "Bash(open:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": []
   }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useState, useEffect } from "react"
-import { Upload, Plus, FileSearch, Calendar, Pill, Stethoscope, AlertCircle } from "lucide-react"
+import { Upload, Plus, FileSearch, Calendar, Pill, Stethoscope, AlertCircle, Edit } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { MatchedPoliciesDropdown } from "@/app/components/matched-policies-dropdown"
@@ -15,7 +15,7 @@ import { checkAuth } from "@/app/actions/auth-service"
 
 export default function MedicalRecordsPage() {
   const [expandedRecord, setExpandedRecord] = useState<number | null>(null)
-  const [medicalRecords, setMedicalRecords] = useState([])
+  const [medicalRecords, setMedicalRecords] = useState<any[]>([])
   const [user, setUser] = useState<{ id: string, name: string } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const isMobile = useMediaQuery("(max-width: 768px)")
@@ -76,25 +76,39 @@ export default function MedicalRecordsPage() {
       // 將真實資料轉換為UI需要的格式
       const formattedRecords = rawRecords.map((record, index) => {
         console.log('處理病歷記錄:', record.fileName, record.medicalInfo);
-        const medicalData = record.medicalInfo || {}
+        const medicalData = (record.medicalInfo as any) || {}
         
         // 從 hospitalStamp 或 clinicalRecord 提取醫院資訊
         let hospital = '未知醫院';
-        if (medicalData.hospitalStamp && medicalData.hospitalStamp !== '待輸入') {
+        if (medicalData.hospitalStamp && medicalData.hospitalStamp !== '待輸入' && medicalData.hospitalStamp !== '') {
           hospital = medicalData.hospitalStamp;
-        } else if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入' && medicalData.clinicalRecord.includes('醫院')) {
+        } else if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入' && medicalData.clinicalRecord !== '' && medicalData.clinicalRecord.includes('醫院')) {
           const hospitalMatch = medicalData.clinicalRecord.match(/([^,\n]*醫院[^,\n]*)/);
           if (hospitalMatch) hospital = hospitalMatch[1].trim();
         }
         
+        // 如果有原始資料，優先使用
+        if (medicalData._originalData?.hospital && medicalData._originalData.hospital !== '待輸入' && medicalData._originalData.hospital !== '') {
+          hospital = medicalData._originalData.hospital;
+        }
+        
         // 從 clinicalRecord 提取診斷資訊
         let diagnosis = '診斷資料處理中';
-        if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入') {
+        if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入' && medicalData.clinicalRecord !== '') {
           diagnosis = medicalData.clinicalRecord;
-        } else if (medicalData.admissionRecord && medicalData.admissionRecord !== '待輸入') {
+        } else if (medicalData.admissionRecord && medicalData.admissionRecord !== '待輸入' && medicalData.admissionRecord !== '') {
           diagnosis = medicalData.admissionRecord;
-        } else if (medicalData.examinationReport && medicalData.examinationReport !== '待輸入') {
+        } else if (medicalData.examinationReport && medicalData.examinationReport !== '待輸入' && medicalData.examinationReport !== '') {
           diagnosis = medicalData.examinationReport;
+        }
+        
+        // 如果還是預設值，檢查是否有其他可用資訊
+        if (diagnosis === '診斷資料處理中') {
+          console.log('診斷資料檢查:', {
+            clinicalRecord: medicalData.clinicalRecord,
+            admissionRecord: medicalData.admissionRecord,
+            examinationReport: medicalData.examinationReport
+          });
         }
         
         // 處理治療記錄
@@ -114,13 +128,26 @@ export default function MedicalRecordsPage() {
         }
         if (medications.length === 0) medications = ['用藥記錄處理中'];
         
+        // 提取科別和醫師資訊
+        let department = '醫療科別';
+        let doctor = '主治醫師';
+        
+        // 如果有原始資料，使用原始資料
+        if (medicalData._originalData?.department && medicalData._originalData.department !== '待輸入' && medicalData._originalData.department !== '') {
+          department = medicalData._originalData.department;
+        }
+        
+        if (medicalData._originalData?.doctor && medicalData._originalData.doctor !== '待輸入' && medicalData._originalData.doctor !== '') {
+          doctor = medicalData._originalData.doctor;
+        }
+        
         return {
           id: record.id || `record_${index + 1}`,
           hospital: hospital,
-          department: '醫療科別', // 可從病歷內容推斷，目前先用預設值
+          department: department,
           date: record.uploadDate ? new Date(record.uploadDate).toLocaleDateString('zh-TW') : '未知日期',
           diagnosis: diagnosis,
-          doctor: '主治醫師', // 可從病歷內容提取，目前先用預設值
+          doctor: doctor,
           treatments: treatments,
           medications: medications,
           hasInsuranceCoverage: true, // 暫時設為true，保持按鈕可用
@@ -439,12 +466,20 @@ export default function MedicalRecordsPage() {
                       </CardTitle>
                       <CardDescription>{record.date}</CardDescription>
                     </div>
-                    <Link href={`/medical-records/${record.id}`} className="w-full md:w-auto">
-                      <Button variant="ghost" size="sm" className="w-full md:w-auto">
-                        <FileSearch className="h-4 w-4 mr-2" />
-                        查看詳情
-                      </Button>
-                    </Link>
+                    <div className="flex gap-2 w-full md:w-auto">
+                      <Link href={`/medical-records/${record.id}`} className="flex-1 md:flex-initial">
+                        <Button variant="ghost" size="sm" className="w-full md:w-auto">
+                          <FileSearch className="h-4 w-4 mr-2" />
+                          查看詳情
+                        </Button>
+                      </Link>
+                      <Link href={`/medical-records/edit/${record.id}`} className="flex-1 md:flex-initial">
+                        <Button variant="outline" size="sm" className="w-full md:w-auto">
+                          <Edit className="h-4 w-4 mr-2" />
+                          編輯
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -576,12 +611,20 @@ export default function MedicalRecordsPage() {
                         </CardTitle>
                         <CardDescription>{record.date}</CardDescription>
                       </div>
-                      <Link href={`/medical-records/${record.id}`} className="w-full md:w-auto">
-                        <Button variant="ghost" size="sm" className="w-full md:w-auto">
-                          <FileSearch className="h-4 w-4 mr-2" />
-                          查看詳情
-                        </Button>
-                      </Link>
+                      <div className="flex gap-2 w-full md:w-auto">
+                        <Link href={`/medical-records/${record.id}`} className="flex-1 md:flex-initial">
+                          <Button variant="ghost" size="sm" className="w-full md:w-auto">
+                            <FileSearch className="h-4 w-4 mr-2" />
+                            查看詳情
+                          </Button>
+                        </Link>
+                        <Link href={`/medical-records/edit/${record.id}`} className="flex-1 md:flex-initial">
+                          <Button variant="outline" size="sm" className="w-full md:w-auto">
+                            <Edit className="h-4 w-4 mr-2" />
+                            編輯
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -652,12 +695,20 @@ export default function MedicalRecordsPage() {
                         </CardTitle>
                         <CardDescription>{record.date}</CardDescription>
                       </div>
-                      <Link href={`/medical-records/${record.id}`} className="w-full md:w-auto">
-                        <Button variant="ghost" size="sm" className="w-full md:w-auto">
-                          <FileSearch className="h-4 w-4 mr-2" />
-                          查看詳情
-                        </Button>
-                      </Link>
+                      <div className="flex gap-2 w-full md:w-auto">
+                        <Link href={`/medical-records/${record.id}`} className="flex-1 md:flex-initial">
+                          <Button variant="ghost" size="sm" className="w-full md:w-auto">
+                            <FileSearch className="h-4 w-4 mr-2" />
+                            查看詳情
+                          </Button>
+                        </Link>
+                        <Link href={`/medical-records/edit/${record.id}`} className="flex-1 md:flex-initial">
+                          <Button variant="outline" size="sm" className="w-full md:w-auto">
+                            <Edit className="h-4 w-4 mr-2" />
+                            編輯
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
