@@ -28,12 +28,13 @@ export interface BaseDocument {
   notes?: string
 }
 
-// 病歷記錄
+// 病歷記錄（合併診斷證明功能）
 export interface MedicalRecord extends BaseDocument {
-  documentType: 'medical'
+  documentType: 'medical' | 'diagnosis' | 'report' | string
   
-  // 病例記錄 AI 分析資訊
+  // 病例記錄 AI 分析資訊（擴展支援診斷證明）
   medicalInfo?: {
+    // === 原病歷欄位 ===
     // 門診/急診/住院紀錄
     clinicalRecord?: string
     
@@ -54,6 +55,36 @@ export interface MedicalRecord extends BaseDocument {
     
     // 醫療院所章戳與簽名
     hospitalStamp?: string
+    
+    // === 新增診斷證明欄位 ===
+    // 文件標題
+    documentTitle?: string
+    
+    // 證明書類型
+    certificateType?: string
+    
+    // 主要診斷疾病或醫療主題
+    medicalSubject?: string
+    
+    // 病患基本資料
+    patientName?: string
+    birthDate?: string
+    idNumber?: string
+    
+    // 醫療日期資訊
+    firstVisitDate?: string
+    certificateDate?: string
+    
+    // 診斷資訊
+    icdCode?: string
+    diseaseName?: string
+    treatmentSummary?: string
+    
+    // 休養建議
+    restPeriod?: string
+    
+    // 是否意外傷害
+    isAccident?: string
   }
 }
 

@@ -1092,7 +1092,10 @@ ${summary?.flatFields ? `## 其他摘要（flatFields）\n${JSON.stringify(summa
   /**
    * 分析病例記錄文件 - 符合 Zoe 專案欄位結構
    */
-  async analyzeMedicalRecord(text: string, imageBase64: string | null = null): Promise<any> {
+  /**
+   * 合併的醫療文件分析方法 - 支援病歷和診斷證明
+   */
+  async analyzeMedicalDocument(text: string, imageBase64: string | null = null): Promise<any> {
     try {
       console.log('分析醫療記錄文件 - 文字長度:', text.length, '圖片:', imageBase64 ? '有' : '無');
       
@@ -1146,8 +1149,13 @@ ${summary?.flatFields ? `## 其他摘要（flatFields）\n${JSON.stringify(summa
 // 請開始分析：`;
       
 
-      const prompt = `你是資深醫療文件分析專家，專門識別病歷和醫療記錄中的關鍵資訊。
-請記住：不同病歷格式可能會有不同的欄位名稱或位置，你必須靈活比對內容，只要有出現相關資訊就抽取；若沒有，欄位留空字串 ""。禁止自行推測或填寫不存在的資訊。
+      const prompt = `你是資深醫療文件分析專家，專門識別各種醫療文件（病歷、診斷證明書、檢查報告等）中的關鍵資訊。
+
+## 📋 文件類型智能判斷
+請先判斷文件類型，然後提取相應資訊：
+- **病歷記錄**：門診或住院記錄、就診紀錄
+- **診斷證明書**：正式醫療證明文件
+- **檢查報告**：各種醫學檢驗結果
 
 ${text ? `## 📋 文字資料分析
 ${text}
@@ -1155,43 +1163,64 @@ ${text}
 
 ${imageBase64 ? `## 🖼️ 圖片內容分析
 請仔細檢視並分析圖片中的所有醫療資訊：
-- 醫院名稱與標誌（可能出現在表頭）
-- 就診科別與醫師姓名（可能在表格上方）
-- 就診日期（可能在主訴區、檢查日期或表頭）
-- 診斷代碼與診斷名稱（ICD碼或中文診斷名稱）
+
+**基本資訊區域**
+- 醫院名稱與標誌（通常在表頭）
+- 文件標題類型（病歷、診斷證明、檢查報告等）
+- 病患姓名、出生日期、身分證字號（如有顯示）
+- 就診科別與醫師姓名
+
+**醫療內容區域**  
+- 就診日期或檢查日期
+- 診斷代碼與診斷名稱（ICD碼或中文診斷）
+- 主要疾病或醫療主題
 - 檢查或檢驗項目（如X光、心電圖等）
-- 治療方案與處置
+- 治療方案與處置建議
 - 用藥記錄（藥名、劑量、天數等）
-- 其他可見醫療專業術語
+- 休養建議或工作限制
+
+**認證資訊區域**
+- 醫師簽章或印章
+- 證明書開立日期
+- 是否為意外傷害相關
 
 **重要規則**：
-1. 必須逐字識別病歷中的資訊，嚴禁只給概括。
-2. 不同格式病歷欄位名稱不同，也要能正確對應抽取。
-3. 如果某欄位沒有出現，就填入空字串 ""。
-4. 不可憑常識或經驗補資料，只能來自文件。
-5. 日期一律轉換為 YYYY-MM-DD 格式。
-6. "isFirstOccurrence" 請依病歷內容判斷：若明確顯示為初診填 yes，若顯示為複診填 no，否則填 unknown。
+1. 必須逐字識別文件中的資訊，嚴禁只給概括描述
+2. 不同格式文件欄位名稱不同，要能正確對應抽取
+3. 如果某欄位沒有出現，就填入空字串 ""
+4. 不可憑常識或經驗補充資料，只能來自實際文件內容
+5. 日期一律轉換為 YYYY-MM-DD 格式
+6. "isFirstOccurrence" 請依文件內容判斷：若明確顯示為初診填 yes，若顯示為複診填 no，否則填 unknown
 ` : ''}
 
-## 📤 輸出格式
+## 📤 標準輸出格式
 
-請務必以以下JSON格式輸出（固定結構，不得增減）：
+請務必以以下JSON格式輸出（對齊病歷編輯頁面欄位）：
 
 {
-  "hospital": "醫院名稱",
+  "patientName": "患者姓名",
+  "patientAge": "年齡（數字）",
+  "patientGender": "性別（male/female/other）",
+  "hospitalName": "醫院名稱",
   "department": "科別",
-  "visitDate": "YYYY-MM-DD",
-  "doctor": "主治醫師",
-  "isFirstOccurrence": "yes/no/unknown",
+  "doctorName": "主治醫師",
+  "visitDate": "就診日期 YYYY-MM-DD",
+  "isFirstOccurrence": "是否首次發病（yes/no/unknown）",
   "medicalExam": "醫學檢查項目",
   "diagnosis": "診斷結果",
-  "treatment": "治療方案",
-  "medication": "用藥記錄"
+  "symptoms": "症狀描述",
+  "treatment": "治療方式",
+  "medications": "用藥記錄",
+  "notes": "備註"
 }
 
-**提醒**：
-- 請保持欄位固定，即使文件未提供該資訊也要輸出該欄位，值為 ""。
-- 僅能依據文件實際內容填寫，不要臆測。
+**重要提醒**：
+- 保持所有欄位固定，即使文件未提供該資訊也要輸出該欄位，值為 ""
+- 僅能依據文件實際內容填寫，禁止推測或臆測
+- patientAge 填入純數字，如 "45"
+- patientGender 只能填 "male", "female", "other" 三選一
+- isFirstOccurrence 只能填 "yes", "no", "unknown" 三選一
+- visitDate 統一格式為 YYYY-MM-DD
 
 請開始分析：`;
 
@@ -1250,9 +1279,17 @@ ${imageBase64 ? `## 🖼️ 圖片內容分析
         medication: ""
       };
     } catch (error) {
-      console.error('醫療記錄分析錯誤:', error);
+      console.error('醫療文件分析錯誤:', error);
       throw error;
     }
+  }
+
+  /**
+   * 向後兼容的病歷分析方法 - 直接使用新格式
+   */
+  async analyzeMedicalRecord(text: string, imageBase64: string | null = null): Promise<any> {
+    // 直接使用新的格式，不再需要轉換
+    return await this.analyzeMedicalDocument(text, imageBase64);
   }
 
   /**

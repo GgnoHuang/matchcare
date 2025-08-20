@@ -91,63 +91,42 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
       setRecord(foundRecord)
       console.log('載入的病歷資料:', foundRecord)
       
-      // 填入表單資料 - 從 medicalInfo 中提取資料
+      // 填入表單資料 - 使用標準 JSON 格式（向下兼容舊格式）
       const medicalData = foundRecord.medicalInfo || {}
       
-      // 提取患者基本資訊
-      let patientName = '王小明' // 預設值
-      let patientAge = '45'
-      let patientGender = 'male'
+      console.log('編輯頁面載入的病歷資料:', medicalData);
       
-      // 從病歷中提取醫院資訊
-      let hospitalName = '未知醫院'
-      if (medicalData.hospitalStamp && medicalData.hospitalStamp !== '待輸入') {
-        hospitalName = medicalData.hospitalStamp
-      } else if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入' && medicalData.clinicalRecord.includes('醫院')) {
-        const hospitalMatch = medicalData.clinicalRecord.match(/([^,\n]*醫院[^,\n]*)/)
-        if (hospitalMatch) hospitalName = hospitalMatch[1].trim()
-      }
-      
-      // 從病歷中提取診斷資訊
-      let diagnosis = '診斷資料處理中'
-      if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入') {
-        diagnosis = medicalData.clinicalRecord
-      } else if (medicalData.admissionRecord && medicalData.admissionRecord !== '待輸入') {
-        diagnosis = medicalData.admissionRecord
-      } else if (medicalData.examinationReport && medicalData.examinationReport !== '待輸入') {
-        diagnosis = medicalData.examinationReport
-      }
-      
-      // 提取治療記錄
-      let treatments = []
-      if (medicalData.surgeryRecord && medicalData.surgeryRecord !== '待輸入') {
-        treatments.push(medicalData.surgeryRecord)
-      }
-      if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入' && medicalData.clinicalRecord.includes('治療')) {
-        treatments.push('從門診記錄中識別的治療')
-      }
-      
-      // 提取用藥記錄
-      let medications = []
-      if (medicalData.medicationRecord && medicalData.medicationRecord !== '待輸入') {
-        medications.push(medicalData.medicationRecord)
-      }
+      // 向下兼容：如果是舊格式，轉換成新格式
+      const patientName = medicalData.patientName || medicalData.patientInfo?.name || "";
+      const patientAge = medicalData.patientAge || medicalData.patientInfo?.age || "";
+      const patientGender = medicalData.patientGender || medicalData.patientInfo?.gender || "male";
+      const hospitalName = medicalData.hospitalName || medicalData.hospitalStamp || "";
+      const department = medicalData.department || medicalData.visitInfo?.department || "";
+      const doctorName = medicalData.doctorName || medicalData.visitInfo?.doctor || "";
+      const visitDate = medicalData.visitDate || medicalData.visitInfo?.date;
+      const diagnosis = medicalData.diagnosis || medicalData.clinicalRecord || "";
+      const symptoms = medicalData.symptoms || "";
+      const treatment = medicalData.treatment || medicalData.surgeryRecord || "";
+      const medications = medicalData.medications || medicalData.medicationRecord || "";
+      const notes = medicalData.notes || "";
+      const isFirstOccurrence = medicalData.isFirstOccurrence || "unknown";
+      const medicalExam = medicalData.medicalExam || "";
       
       setFormData({
         patientName: patientName,
         patientAge: patientAge,
         patientGender: patientGender,
         hospitalName: hospitalName,
-        department: '醫療科別', // 可從病歷內容推斷，目前先用預設值
-        doctorName: '主治醫師', // 可從病歷內容提取，目前先用預設值
-        visitDate: foundRecord.uploadDate ? new Date(foundRecord.uploadDate) : undefined,
+        department: department,
+        doctorName: doctorName,
+        visitDate: visitDate ? new Date(visitDate) : undefined,
         diagnosis: diagnosis,
-        symptoms: medicalData.symptoms || '症狀資料處理中',
-        treatment: treatments.join(", ") || '治療記錄處理中',
-        medications: medications.join(", ") || '用藥記錄處理中',
-        notes: medicalData.notes || '',
-        isFirstOccurrence: "yes",
-        medicalExam: "blood-test",
+        symptoms: symptoms,
+        treatment: treatment,
+        medications: medications,
+        notes: notes,
+        isFirstOccurrence: isFirstOccurrence,
+        medicalExam: medicalExam,
       })
       
     } catch (error) {
@@ -172,29 +151,24 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
     }
 
     try {
-      // 準備更新的病歷資料，保留原有結構，只更新可編輯的欄位
+      // 使用標準 JSON 格式更新病歷資料
       const updatedRecord = {
         ...record,
         medicalInfo: {
-          ...record.medicalInfo,
-          // 更新可編輯的欄位
-          hospitalStamp: formData.hospitalName,
-          clinicalRecord: formData.diagnosis,
+          patientName: formData.patientName,
+          patientAge: formData.patientAge,
+          patientGender: formData.patientGender,
+          hospitalName: formData.hospitalName,
+          department: formData.department,
+          doctorName: formData.doctorName,
+          visitDate: formData.visitDate ? formData.visitDate.toISOString().split('T')[0] : "",
+          isFirstOccurrence: formData.isFirstOccurrence,
+          medicalExam: formData.medicalExam,
+          diagnosis: formData.diagnosis,
           symptoms: formData.symptoms,
-          surgeryRecord: formData.treatment.includes('手術') ? formData.treatment : record.medicalInfo?.surgeryRecord,
-          medicationRecord: formData.medications,
-          notes: formData.notes,
-          // 保留其他原有欄位
-          patientInfo: {
-            name: formData.patientName,
-            age: formData.patientAge,
-            gender: formData.patientGender,
-          },
-          visitInfo: {
-            date: formData.visitDate ? formData.visitDate.toISOString() : record.uploadDate,
-            department: formData.department,
-            doctor: formData.doctorName,
-          }
+          treatment: formData.treatment,
+          medications: formData.medications,
+          notes: formData.notes
         }
       }
 

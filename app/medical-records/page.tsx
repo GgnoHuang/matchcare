@@ -78,68 +78,13 @@ export default function MedicalRecordsPage() {
         console.log('處理病歷記錄:', record.fileName, record.medicalInfo);
         const medicalData = (record.medicalInfo as any) || {}
         
-        // 從 hospitalStamp 或 clinicalRecord 提取醫院資訊
-        let hospital = '未知醫院';
-        if (medicalData.hospitalStamp && medicalData.hospitalStamp !== '待輸入' && medicalData.hospitalStamp !== '') {
-          hospital = medicalData.hospitalStamp;
-        } else if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入' && medicalData.clinicalRecord !== '' && medicalData.clinicalRecord.includes('醫院')) {
-          const hospitalMatch = medicalData.clinicalRecord.match(/([^,\n]*醫院[^,\n]*)/);
-          if (hospitalMatch) hospital = hospitalMatch[1].trim();
-        }
-        
-        // 如果有原始資料，優先使用
-        if (medicalData._originalData?.hospital && medicalData._originalData.hospital !== '待輸入' && medicalData._originalData.hospital !== '') {
-          hospital = medicalData._originalData.hospital;
-        }
-        
-        // 從 clinicalRecord 提取診斷資訊
-        let diagnosis = '診斷資料處理中';
-        if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入' && medicalData.clinicalRecord !== '') {
-          diagnosis = medicalData.clinicalRecord;
-        } else if (medicalData.admissionRecord && medicalData.admissionRecord !== '待輸入' && medicalData.admissionRecord !== '') {
-          diagnosis = medicalData.admissionRecord;
-        } else if (medicalData.examinationReport && medicalData.examinationReport !== '待輸入' && medicalData.examinationReport !== '') {
-          diagnosis = medicalData.examinationReport;
-        }
-        
-        // 如果還是預設值，檢查是否有其他可用資訊
-        if (diagnosis === '診斷資料處理中') {
-          console.log('診斷資料檢查:', {
-            clinicalRecord: medicalData.clinicalRecord,
-            admissionRecord: medicalData.admissionRecord,
-            examinationReport: medicalData.examinationReport
-          });
-        }
-        
-        // 處理治療記錄
-        let treatments = [];
-        if (medicalData.surgeryRecord && medicalData.surgeryRecord !== '待輸入') {
-          treatments.push(medicalData.surgeryRecord);
-        }
-        if (medicalData.clinicalRecord && medicalData.clinicalRecord !== '待輸入' && medicalData.clinicalRecord.includes('治療')) {
-          treatments.push('從門診記錄中識別的治療');
-        }
-        if (treatments.length === 0) treatments = ['治療記錄處理中'];
-        
-        // 處理用藥記錄
-        let medications = [];
-        if (medicalData.medicationRecord && medicalData.medicationRecord !== '待輸入') {
-          medications.push(medicalData.medicationRecord);
-        }
-        if (medications.length === 0) medications = ['用藥記錄處理中'];
-        
-        // 提取科別和醫師資訊
-        let department = '醫療科別';
-        let doctor = '主治醫師';
-        
-        // 如果有原始資料，使用原始資料
-        if (medicalData._originalData?.department && medicalData._originalData.department !== '待輸入' && medicalData._originalData.department !== '') {
-          department = medicalData._originalData.department;
-        }
-        
-        if (medicalData._originalData?.doctor && medicalData._originalData.doctor !== '待輸入' && medicalData._originalData.doctor !== '') {
-          doctor = medicalData._originalData.doctor;
-        }
+        // 直接使用標準 JSON 欄位（向下兼容舊格式）
+        const hospital = medicalData.hospitalName || medicalData.hospitalStamp || '未知醫院';
+        const diagnosis = medicalData.diagnosis || medicalData.clinicalRecord || '診斷資料處理中';
+        const treatment = medicalData.treatment || medicalData.surgeryRecord || '治療記錄處理中';
+        const medications = medicalData.medications || medicalData.medicationRecord || '用藥記錄處理中';
+        const department = medicalData.department || '醫療科別';
+        const doctor = medicalData.doctorName || '主治醫師';
         
         return {
           id: record.id || `record_${index + 1}`,
@@ -148,8 +93,8 @@ export default function MedicalRecordsPage() {
           date: record.uploadDate ? new Date(record.uploadDate).toLocaleDateString('zh-TW') : '未知日期',
           diagnosis: diagnosis,
           doctor: doctor,
-          treatments: treatments,
-          medications: medications,
+          treatments: [treatment],
+          medications: [medications],
           hasInsuranceCoverage: true, // 暫時設為true，保持按鈕可用
           matchedPolicies: 1, // 暫時設為1，保持UI一致
           claimSuccessRate: 85, // 暫時設為85%
@@ -171,193 +116,193 @@ export default function MedicalRecordsPage() {
   }
 
   // 保留原來的假資料作為後備，以防真實資料載入失敗
-  const fallbackRecords = [
-    {
-      id: 1,
-      hospital: "台大醫院",
-      department: "腫瘤科",
-      date: "2023-12-15",
-      diagnosis: "乳癌第二期",
-      doctor: "林醫師",
-      treatments: ["手術切除", "化療"],
-      medications: ["紫杉醇", "環磷醯胺"],
-      hasInsuranceCoverage: true,
-      matchedPolicies: 2,
-      claimSuccessRate: 95,
-      matchedPoliciesDetails: [
-        { id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" },
-        { id: 2, company: "新光人壽", name: "重大疾病保險", type: "重疾險" },
-      ],
-    },
-    {
-      id: 2,
-      hospital: "榮總",
-      department: "心臟內科",
-      date: "2023-10-05",
-      diagnosis: "心肌梗塞",
-      doctor: "王醫師",
-      treatments: ["心導管手術", "藥物治療"],
-      medications: ["阿斯匹靈", "氯吡格雷"],
-      hasInsuranceCoverage: true,
-      matchedPolicies: 1,
-      claimSuccessRate: 90,
-      matchedPoliciesDetails: [{ id: 2, company: "新光人壽", name: "重大疾病保險", type: "重疾險" }],
-    },
-    {
-      id: 3,
-      hospital: "三軍總醫院",
-      department: "骨科",
-      date: "2023-08-22",
-      diagnosis: "骨折",
-      doctor: "張醫師",
-      treatments: ["手術固定"],
-      medications: ["止痛藥"],
-      hasInsuranceCoverage: false,
-      matchedPolicies: 0,
-      claimSuccessRate: 0,
-      matchedPoliciesDetails: [],
-    },
-    {
-      id: 4,
-      hospital: "長庚醫院",
-      department: "神經內科",
-      date: "2023-07-10",
-      diagnosis: "腦中風",
-      doctor: "李醫師",
-      treatments: ["藥物治療", "復健"],
-      medications: ["抗凝血劑"],
-      hasInsuranceCoverage: true,
-      matchedPolicies: 3,
-      claimSuccessRate: 98,
-      matchedPoliciesDetails: [
-        { id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" },
-        { id: 2, company: "新光人壽", name: "重大疾病保險", type: "重疾險" },
-        { id: 3, company: "富邦人壽", name: "意外傷害保險", type: "意外險" },
-      ],
-    },
-    // 新增病歷
-    {
-      id: 5,
-      hospital: "馬偕醫院",
-      department: "內分泌科",
-      date: "2023-06-18",
-      diagnosis: "第二型糖尿病",
-      doctor: "陳醫師",
-      treatments: ["藥物治療", "飲食控制"],
-      medications: ["二甲雙胍", "胰島素"],
-      hasInsuranceCoverage: true,
-      matchedPolicies: 1,
-      claimSuccessRate: 85,
-      matchedPoliciesDetails: [{ id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" }],
-    },
-    {
-      id: 6,
-      hospital: "台北醫學大學附設醫院",
-      department: "精神科",
-      date: "2023-05-20",
-      diagnosis: "重度憂鬱症",
-      doctor: "黃醫師",
-      treatments: ["藥物治療", "心理諮商"],
-      medications: ["選擇性血清素再吸收抑制劑"],
-      hasInsuranceCoverage: true,
-      matchedPolicies: 1,
-      claimSuccessRate: 75,
-      matchedPoliciesDetails: [{ id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" }],
-    },
-    {
-      id: 7,
-      hospital: "林口長庚醫院",
-      department: "腎臟科",
-      date: "2023-04-12",
-      diagnosis: "慢性腎臟病第三期",
-      doctor: "吳醫師",
-      treatments: ["藥物治療", "飲食控制"],
-      medications: ["降血壓藥", "利尿劑"],
-      hasInsuranceCoverage: true,
-      matchedPolicies: 2,
-      claimSuccessRate: 92,
-      matchedPoliciesDetails: [
-        { id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" },
-        { id: 4, company: "南山人壽", name: "住院醫療保險", type: "醫療險" },
-      ],
-    },
-    {
-      id: 8,
-      hospital: "高雄醫學大學附設醫院",
-      department: "風濕免疫科",
-      date: "2023-03-05",
-      diagnosis: "類風濕性關節炎",
-      doctor: "林醫師",
-      treatments: ["藥物治療", "物理治療"],
-      medications: ["非類固醇消炎藥", "疾病調節抗風濕藥"],
-      hasInsuranceCoverage: true,
-      matchedPolicies: 1,
-      claimSuccessRate: 88,
-      matchedPoliciesDetails: [{ id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" }],
-    },
-    {
-      id: 9,
-      hospital: "台中榮民總醫院",
-      department: "胃腸肝膽科",
-      date: "2023-02-18",
-      diagnosis: "肝硬化",
-      doctor: "謝醫師",
-      treatments: ["藥物治療", "飲食控制"],
-      medications: ["利尿劑", "蛋白質補充劑"],
-      hasInsuranceCoverage: true,
-      matchedPolicies: 2,
-      claimSuccessRate: 90,
-      matchedPoliciesDetails: [
-        { id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" },
-        { id: 2, company: "新光人壽", name: "重大疾病保險", type: "重疾險" },
-      ],
-    },
-    {
-      id: 10,
-      hospital: "奇美醫院",
-      department: "呼吸胸腔科",
-      date: "2023-01-10",
-      diagnosis: "慢性阻塞性肺病",
-      doctor: "鄭醫師",
-      treatments: ["藥物治療", "呼吸復健"],
-      medications: ["支氣管擴張劑", "類固醇吸入劑"],
-      hasInsuranceCoverage: true,
-      matchedPolicies: 1,
-      claimSuccessRate: 85,
-      matchedPoliciesDetails: [{ id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" }],
-    },
-    {
-      id: 11,
-      hospital: "成大醫院",
-      department: "皮膚科",
-      date: "2022-12-05",
-      diagnosis: "乾癬",
-      doctor: "劉醫師",
-      treatments: ["藥物治療", "光療"],
-      medications: ["外用類固醇", "免疫抑制劑"],
-      hasInsuranceCoverage: false,
-      matchedPolicies: 0,
-      claimSuccessRate: 0,
-      matchedPoliciesDetails: [],
-    },
-    {
-      id: 12,
-      hospital: "台北榮民總醫院",
-      department: "神經外科",
-      date: "2022-11-15",
-      diagnosis: "腦瘤",
-      doctor: "周醫師",
-      treatments: ["手術切除", "放射治療"],
-      medications: ["類固醇", "抗癲癇藥"],
-      hasInsuranceCoverage: true,
-      matchedPolicies: 2,
-      claimSuccessRate: 95,
-      matchedPoliciesDetails: [
-        { id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" },
-        { id: 2, company: "新光人壽", name: "重大疾病保險", type: "重疾險" },
-      ],
-    },
-  ]
+  // const fallbackRecords = [
+  //   {
+  //     id: 1,
+  //     hospital: "台大醫院",
+  //     department: "腫瘤科",
+  //     date: "2023-12-15",
+  //     diagnosis: "乳癌第二期",
+  //     doctor: "林醫師",
+  //     treatments: ["手術切除", "化療"],
+  //     medications: ["紫杉醇", "環磷醯胺"],
+  //     hasInsuranceCoverage: true,
+  //     matchedPolicies: 2,
+  //     claimSuccessRate: 95,
+  //     matchedPoliciesDetails: [
+  //       { id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" },
+  //       { id: 2, company: "新光人壽", name: "重大疾病保險", type: "重疾險" },
+  //     ],
+  //   },
+  //   {
+  //     id: 2,
+  //     hospital: "榮總",
+  //     department: "心臟內科",
+  //     date: "2023-10-05",
+  //     diagnosis: "心肌梗塞",
+  //     doctor: "王醫師",
+  //     treatments: ["心導管手術", "藥物治療"],
+  //     medications: ["阿斯匹靈", "氯吡格雷"],
+  //     hasInsuranceCoverage: true,
+  //     matchedPolicies: 1,
+  //     claimSuccessRate: 90,
+  //     matchedPoliciesDetails: [{ id: 2, company: "新光人壽", name: "重大疾病保險", type: "重疾險" }],
+  //   },
+  //   {
+  //     id: 3,
+  //     hospital: "三軍總醫院",
+  //     department: "骨科",
+  //     date: "2023-08-22",
+  //     diagnosis: "骨折",
+  //     doctor: "張醫師",
+  //     treatments: ["手術固定"],
+  //     medications: ["止痛藥"],
+  //     hasInsuranceCoverage: false,
+  //     matchedPolicies: 0,
+  //     claimSuccessRate: 0,
+  //     matchedPoliciesDetails: [],
+  //   },
+  //   {
+  //     id: 4,
+  //     hospital: "長庚醫院",
+  //     department: "神經內科",
+  //     date: "2023-07-10",
+  //     diagnosis: "腦中風",
+  //     doctor: "李醫師",
+  //     treatments: ["藥物治療", "復健"],
+  //     medications: ["抗凝血劑"],
+  //     hasInsuranceCoverage: true,
+  //     matchedPolicies: 3,
+  //     claimSuccessRate: 98,
+  //     matchedPoliciesDetails: [
+  //       { id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" },
+  //       { id: 2, company: "新光人壽", name: "重大疾病保險", type: "重疾險" },
+  //       { id: 3, company: "富邦人壽", name: "意外傷害保險", type: "意外險" },
+  //     ],
+  //   },
+  //   // 新增病歷
+  //   {
+  //     id: 5,
+  //     hospital: "馬偕醫院",
+  //     department: "內分泌科",
+  //     date: "2023-06-18",
+  //     diagnosis: "第二型糖尿病",
+  //     doctor: "陳醫師",
+  //     treatments: ["藥物治療", "飲食控制"],
+  //     medications: ["二甲雙胍", "胰島素"],
+  //     hasInsuranceCoverage: true,
+  //     matchedPolicies: 1,
+  //     claimSuccessRate: 85,
+  //     matchedPoliciesDetails: [{ id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" }],
+  //   },
+  //   {
+  //     id: 6,
+  //     hospital: "台北醫學大學附設醫院",
+  //     department: "精神科",
+  //     date: "2023-05-20",
+  //     diagnosis: "重度憂鬱症",
+  //     doctor: "黃醫師",
+  //     treatments: ["藥物治療", "心理諮商"],
+  //     medications: ["選擇性血清素再吸收抑制劑"],
+  //     hasInsuranceCoverage: true,
+  //     matchedPolicies: 1,
+  //     claimSuccessRate: 75,
+  //     matchedPoliciesDetails: [{ id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" }],
+  //   },
+  //   {
+  //     id: 7,
+  //     hospital: "林口長庚醫院",
+  //     department: "腎臟科",
+  //     date: "2023-04-12",
+  //     diagnosis: "慢性腎臟病第三期",
+  //     doctor: "吳醫師",
+  //     treatments: ["藥物治療", "飲食控制"],
+  //     medications: ["降血壓藥", "利尿劑"],
+  //     hasInsuranceCoverage: true,
+  //     matchedPolicies: 2,
+  //     claimSuccessRate: 92,
+  //     matchedPoliciesDetails: [
+  //       { id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" },
+  //       { id: 4, company: "南山人壽", name: "住院醫療保險", type: "醫療險" },
+  //     ],
+  //   },
+  //   {
+  //     id: 8,
+  //     hospital: "高雄醫學大學附設醫院",
+  //     department: "風濕免疫科",
+  //     date: "2023-03-05",
+  //     diagnosis: "類風濕性關節炎",
+  //     doctor: "林醫師",
+  //     treatments: ["藥物治療", "物理治療"],
+  //     medications: ["非類固醇消炎藥", "疾病調節抗風濕藥"],
+  //     hasInsuranceCoverage: true,
+  //     matchedPolicies: 1,
+  //     claimSuccessRate: 88,
+  //     matchedPoliciesDetails: [{ id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" }],
+  //   },
+  //   {
+  //     id: 9,
+  //     hospital: "台中榮民總醫院",
+  //     department: "胃腸肝膽科",
+  //     date: "2023-02-18",
+  //     diagnosis: "肝硬化",
+  //     doctor: "謝醫師",
+  //     treatments: ["藥物治療", "飲食控制"],
+  //     medications: ["利尿劑", "蛋白質補充劑"],
+  //     hasInsuranceCoverage: true,
+  //     matchedPolicies: 2,
+  //     claimSuccessRate: 90,
+  //     matchedPoliciesDetails: [
+  //       { id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" },
+  //       { id: 2, company: "新光人壽", name: "重大疾病保險", type: "重疾險" },
+  //     ],
+  //   },
+  //   {
+  //     id: 10,
+  //     hospital: "奇美醫院",
+  //     department: "呼吸胸腔科",
+  //     date: "2023-01-10",
+  //     diagnosis: "慢性阻塞性肺病",
+  //     doctor: "鄭醫師",
+  //     treatments: ["藥物治療", "呼吸復健"],
+  //     medications: ["支氣管擴張劑", "類固醇吸入劑"],
+  //     hasInsuranceCoverage: true,
+  //     matchedPolicies: 1,
+  //     claimSuccessRate: 85,
+  //     matchedPoliciesDetails: [{ id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" }],
+  //   },
+  //   {
+  //     id: 11,
+  //     hospital: "成大醫院",
+  //     department: "皮膚科",
+  //     date: "2022-12-05",
+  //     diagnosis: "乾癬",
+  //     doctor: "劉醫師",
+  //     treatments: ["藥物治療", "光療"],
+  //     medications: ["外用類固醇", "免疫抑制劑"],
+  //     hasInsuranceCoverage: false,
+  //     matchedPolicies: 0,
+  //     claimSuccessRate: 0,
+  //     matchedPoliciesDetails: [],
+  //   },
+  //   {
+  //     id: 12,
+  //     hospital: "台北榮民總醫院",
+  //     department: "神經外科",
+  //     date: "2022-11-15",
+  //     diagnosis: "腦瘤",
+  //     doctor: "周醫師",
+  //     treatments: ["手術切除", "放射治療"],
+  //     medications: ["類固醇", "抗癲癇藥"],
+  //     hasInsuranceCoverage: true,
+  //     matchedPolicies: 2,
+  //     claimSuccessRate: 95,
+  //     matchedPoliciesDetails: [
+  //       { id: 1, company: "國泰人壽", name: "安心醫療保險", type: "醫療險" },
+  //       { id: 2, company: "新光人壽", name: "重大疾病保險", type: "重疾險" },
+  //     ],
+  //   },
+  // ]
 
   // 使用真實資料，如果沒有則顯示提示
   const displayRecords = medicalRecords.length > 0 ? medicalRecords : []

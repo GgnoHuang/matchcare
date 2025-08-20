@@ -25,15 +25,20 @@ import { checkAuth } from "@/app/actions/auth-service"
 
 
 interface ExtractedData {
-  hospital: string
+  patientName: string
+  patientAge: string
+  patientGender: string
+  hospitalName: string
   department: string
-  doctor: string
+  doctorName: string
   visitDate: string
   diagnosis: string
+  symptoms: string
   treatment: string
-  medication: string
-  medicalExam: string
+  medications: string
+  notes: string
   isFirstOccurrence: string
+  medicalExam: string
 }
 
 export default function MedicalRecordsImportPage() {
@@ -90,7 +95,7 @@ export default function MedicalRecordsImportPage() {
 
       const openaiService = new OpenAIService()
       console.log('開始 AI 分析...')
-      const result = await openaiService.analyzeMedicalRecord(
+      const result = await openaiService.analyzeMedicalDocument(
         fileData.text || '', 
         fileData.base64
       )
@@ -99,18 +104,8 @@ export default function MedicalRecordsImportPage() {
       setIsProcessing(false)
       setIsCompleted(true)
 
-      // Convert result to expected format
-      setExtractedData({
-        hospital: result.hospital || "未識別",
-        department: result.department || "未識別", 
-        doctor: result.doctor || "未識別",
-        visitDate: result.visitDate || "未識別",
-        diagnosis: result.diagnosis || "未識別",
-        treatment: result.treatment || "未識別",
-        medication: result.medication || "未識別",
-        medicalExam: result.medicalExam || "未識別",
-        isFirstOccurrence: result.isFirstOccurrence || "未識別"
-      })
+      // 直接使用標準 JSON 格式，不做轉換
+      setExtractedData(result)
     } catch (error) {
       console.error('Error analyzing medical record:', error)
       setError('AI 分析失敗，請稍後再試或使用手動輸入')
@@ -130,7 +125,7 @@ export default function MedicalRecordsImportPage() {
     }
     
     try {
-      // Prepare medical record data
+      // 使用標準 JSON 格式直接儲存 AI 分析結果
       const recordData = {
         id: generateId(),
         fileName: 'ai_analyzed',
@@ -140,25 +135,7 @@ export default function MedicalRecordsImportPage() {
         fileSize: 0,
         textContent: '',
         imageBase64: undefined,
-        medicalInfo: {
-          clinicalRecord: extractedData.diagnosis || extractedData.medicalExam || '',
-          admissionRecord: extractedData.diagnosis || '',
-          examinationReport: extractedData.medicalExam || '',
-          medicationRecord: extractedData.medication || '',
-          hospitalStamp: extractedData.hospital || '',
-          // 保留原始資料以便後續使用
-          _originalData: {
-            hospital: extractedData.hospital,
-            department: extractedData.department,
-            doctor: extractedData.doctor,
-            visitDate: extractedData.visitDate,
-            diagnosis: extractedData.diagnosis,
-            treatment: extractedData.treatment,
-            medication: extractedData.medication,
-            medicalExam: extractedData.medicalExam,
-            isFirstOccurrence: extractedData.isFirstOccurrence
-          }
-        }
+        medicalInfo: extractedData // 直接使用 AI 掃描的標準 JSON 格式
       }
       
       // Save using userDataService
@@ -178,7 +155,7 @@ export default function MedicalRecordsImportPage() {
     }
 
     try {
-      // Prepare medical record data
+      // 使用標準 JSON 格式儲存手動輸入資料
       const recordData = {
         id: generateId(),
         fileName: 'manual_input',
@@ -189,23 +166,20 @@ export default function MedicalRecordsImportPage() {
         textContent: '',
         imageBase64: undefined,
         medicalInfo: {
-          clinicalRecord: formData.diagnosis || formData.medicalExam || '',
-          admissionRecord: formData.diagnosis || '',
-          examinationReport: formData.medicalExam || '',
-          medicationRecord: formData.medication || '',
-          hospitalStamp: formData.hospital || '',
-          // 保留原始資料以便後續使用
-          _originalData: {
-            hospital: formData.hospital,
-            department: formData.department,
-            doctor: formData.doctor,
-            visitDate: formData.visitDate ? format(formData.visitDate, "yyyy-MM-dd") : "",
-            medicalExam: formData.medicalExam,
-            diagnosis: formData.diagnosis,
-            treatment: formData.treatment,
-            medication: formData.medication,
-            isFirstOccurrence: formData.isFirstOccurrence
-          }
+          patientName: "", // 手動輸入頁面沒有患者資訊，保持空值
+          patientAge: "",
+          patientGender: "male",
+          hospitalName: formData.hospital,
+          department: formData.department,
+          doctorName: formData.doctor,
+          visitDate: formData.visitDate ? format(formData.visitDate, "yyyy-MM-dd") : "",
+          isFirstOccurrence: formData.isFirstOccurrence,
+          medicalExam: formData.medicalExam,
+          diagnosis: formData.diagnosis,
+          symptoms: "",
+          treatment: formData.treatment,
+          medications: formData.medication,
+          notes: ""
         }
       }
       
@@ -258,7 +232,7 @@ export default function MedicalRecordsImportPage() {
                     <>
                       <div className="flex justify-between">
                         <span className="text-gray-600">醫院：</span>
-                        <span>{extractedData.hospital}</span>
+                        <span>{extractedData.hospitalName}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">科別：</span>
@@ -266,7 +240,7 @@ export default function MedicalRecordsImportPage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">醫師：</span>
-                        <span>{extractedData.doctor}</span>
+                        <span>{extractedData.doctorName}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">就診日期：</span>
@@ -417,9 +391,9 @@ export default function MedicalRecordsImportPage() {
                       <AlertDescription className="text-green-800">
                         <strong>系統已自動辨識您的病歷內容：</strong>
                         <ul className="list-disc list-inside mt-2 space-y-1">
-                          <li>醫院：{extractedData.hospital}</li>
+                          <li>醫院：{extractedData.hospitalName}</li>
                           <li>科別：{extractedData.department}</li>
-                          <li>醫師：{extractedData.doctor}</li>
+                          <li>醫師：{extractedData.doctorName}</li>
                           <li>日期：{extractedData.visitDate}</li>
                         </ul>
                         <p className="mt-2">辨識結果「不一定」是百分百正確。</p>

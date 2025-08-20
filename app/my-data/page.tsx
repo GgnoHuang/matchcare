@@ -35,7 +35,6 @@ import {
   formatDate,
   MedicalRecord, 
   InsurancePolicy,
-  DiagnosisCertificate,
   DocumentType,
   StorageStats 
 } from "@/lib/storage"
@@ -53,7 +52,6 @@ export default function MyDataPage() {
   // 資料狀態
   const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([])
   const [insurancePolicies, setInsurancePolicies] = useState<InsurancePolicy[]>([])
-  const [diagnosisCertificates, setDiagnosisCertificates] = useState<DiagnosisCertificate[]>([])
   const [stats, setStats] = useState<StorageStats | null>(null)
   
   // UI 狀態
@@ -63,7 +61,6 @@ export default function MyDataPage() {
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
   const [editingRecord, setEditingRecord] = useState<MedicalRecord | null>(null)
-  const [editingCertificate, setEditingCertificate] = useState<DiagnosisCertificate | null>(null)
   const [editingPolicy, setEditingPolicy] = useState<InsurancePolicy | null>(null)
   const [isClearingData, setIsClearingData] = useState<boolean>(false)
   const [viewingTextContent, setViewingTextContent] = useState<string | null>(null)
@@ -121,34 +118,6 @@ export default function MyDataPage() {
     return record.fileName
   }
 
-  // 輔助函數：生成診斷證明顯示標題
-  const getDiagnosisCertificateDisplayTitle = (certificate: DiagnosisCertificate): string => {
-    const diagnosisInfo = certificate.diagnosisInfo
-    
-    // 優先使用AI識別的文件標題和醫療主題
-    if (diagnosisInfo?.documentTitle && diagnosisInfo.documentTitle !== '待輸入') {
-      if (diagnosisInfo?.medicalSubject && diagnosisInfo.medicalSubject !== '待輸入') {
-        return `${diagnosisInfo.documentTitle} - ${diagnosisInfo.medicalSubject}`
-      }
-      return diagnosisInfo.documentTitle
-    }
-    
-    // 次選：使用證明書類型 + 醫療主題
-    if (diagnosisInfo?.certificateType && diagnosisInfo.certificateType !== '待輸入') {
-      const subjectText = diagnosisInfo?.medicalSubject && diagnosisInfo.medicalSubject !== '待輸入' 
-        ? ` - ${diagnosisInfo.medicalSubject}` 
-        : ''
-      return `${diagnosisInfo.certificateType}${subjectText}`
-    }
-    
-    // 第三選項：使用醫療主題
-    if (diagnosisInfo?.medicalSubject && diagnosisInfo.medicalSubject !== '待輸入') {
-      return `診斷證明 - ${diagnosisInfo.medicalSubject}`
-    }
-    
-    // 最後選項：使用檔案名稱
-    return certificate.fileName
-  }
 
   // 檢查用戶登入狀態
   useEffect(() => {
@@ -178,16 +147,14 @@ export default function MyDataPage() {
     if (!user?.id) return
 
     try {
-      const [records, policies, certificates, statistics] = await Promise.all([
+      const [records, policies, statistics] = await Promise.all([
         userDataService.getMedicalRecords(user.id),
         userDataService.getInsurancePolicies(user.id),
-        userDataService.getDiagnosisCertificates(user.id),
         userDataService.getStorageStats(user.id)
       ])
 
       setMedicalRecords(records)
       setInsurancePolicies(policies)
-      setDiagnosisCertificates(certificates)
       setStats(statistics)
       
       // 檢查URL參數，自動開啟編輯模式
@@ -217,7 +184,7 @@ export default function MyDataPage() {
       try {
         const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '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'
         const openaiService = new OpenAIService(apiKey)
-        analyzedData = await openaiService.analyzeMedicalRecord(
+        analyzedData = await openaiService.analyzeMedicalDocument(
           fileData.text || '', 
           fileData.base64
         )
@@ -228,22 +195,37 @@ export default function MyDataPage() {
         setUploadSuccess(`AI 分析失敗，正在儲存病歷檔案 "${fileData.filename}"...`)
       }
 
-      // 將 AI 分析結果轉換為 MedicalRecord 格式
+      // 將 AI 分析結果轉換為擴展的 MedicalRecord 格式
       const record: MedicalRecord = {
         id: generateId(),
         fileName: fileData.filename,
         fileType: fileData.type,
-        documentType: 'medical',
+        documentType: analyzedData?.documentType || 'medical',
         uploadDate: new Date().toISOString(),
         fileSize: fileData.size,
         textContent: fileData.text,
         imageBase64: fileData.base64,
         medicalInfo: {
+          // 原病歷欄位
           clinicalRecord: analyzedData?.diagnosis || analyzedData?.medicalExam || '',
-          admissionRecord: analyzedData?.diagnosis || '',
-          examinationReport: analyzedData?.diagnosis || '',
+          admissionRecord: analyzedData?.treatment || '',
+          examinationReport: analyzedData?.medicalExam || '',
           medicationRecord: analyzedData?.medication || '',
-          hospitalStamp: analyzedData?.hospital || ''
+          hospitalStamp: analyzedData?.hospital || '',
+          // 新增診斷證明擴展欄位
+          documentTitle: analyzedData?.documentTitle || '',
+          certificateType: analyzedData?.certificateType || '',
+          medicalSubject: analyzedData?.medicalSubject || '',
+          patientName: analyzedData?.patientName || '',
+          birthDate: analyzedData?.birthDate || '',
+          idNumber: analyzedData?.idNumber || '',
+          firstVisitDate: analyzedData?.firstVisitDate || '',
+          certificateDate: analyzedData?.certificateDate || '',
+          icdCode: analyzedData?.icdCode || '',
+          diseaseName: analyzedData?.diseaseName || '',
+          treatmentSummary: analyzedData?.treatmentSummary || '',
+          restPeriod: analyzedData?.restPeriod || '',
+          isAccident: analyzedData?.isAccident || 'unknown'
         }
       }
 
@@ -337,65 +319,6 @@ export default function MyDataPage() {
     }
   }
 
-  // 處理診斷證明上傳
-  const handleDiagnosisFileUpload = async (fileData: UploadedFile | null) => {
-    if (!fileData || !user?.id) return
-
-    try {
-      setIsAnalyzing(true)
-      setUploadSuccess(`正在分析診斷證明 "${fileData.filename}"...`)
-      
-      // 使用 OpenAI 分析診斷證明
-      let analyzedData = null
-      let analysisSucceeded = false
-      try {
-        const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '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'
-        const openaiService = new OpenAIService(apiKey)
-        analyzedData = await openaiService.analyzeDiagnosisCertificate(
-          fileData.text || '', 
-          fileData.base64
-        )
-        analysisSucceeded = true
-        setUploadSuccess(`正在儲存診斷證明 "${fileData.filename}"...`)
-      } catch (aiError) {
-        console.warn('AI 分析失敗，使用預設值:', aiError)
-        setUploadSuccess(`AI 分析失敗，正在儲存診斷證明 "${fileData.filename}"...`)
-      }
-
-      const certificate: DiagnosisCertificate = {
-        id: generateId(),
-        fileName: fileData.filename,
-        fileType: fileData.type,
-        documentType: 'diagnosis',
-        uploadDate: new Date().toISOString(),
-        fileSize: fileData.size,
-        textContent: fileData.text,
-        imageBase64: fileData.base64,
-        diagnosisInfo: analyzedData
-      }
-
-      await userDataService.saveDiagnosisCertificate(user.id, certificate)
-      await loadUserData()
-      
-      if (analysisSucceeded) {
-        setUploadSuccess(`✅ 診斷證明 "${fileData.filename}" 上傳並 AI 分析完成！`)
-      } else {
-        setUploadSuccess(`⚠️ 診斷證明 "${fileData.filename}" 上傳完成，但 AI 分析失敗`)
-      }
-      setTimeout(() => setUploadSuccess(null), 5000)
-    } catch (error) {
-      console.error('上傳診斷證明失敗:', error)
-      const errorMessage = (error as Error).message
-      if (errorMessage.includes('API 金鑰')) {
-        setUploadError('請先在帳號設定中輸入有效的 OpenAI API 金鑰')
-      } else {
-        setUploadError('上傳診斷證明失敗，請稍後再試')
-      }
-      setTimeout(() => setUploadError(null), 5000)
-    } finally {
-      setIsAnalyzing(false)
-    }
-  }
 
   // 通用檔案上傳處理
   const handleFileUpload = async (fileData: UploadedFile | null, documentType: DocumentType) => {
@@ -403,8 +326,6 @@ export default function MyDataPage() {
       await handleMedicalFileUpload(fileData)
     } else if (documentType === 'insurance') {
       await handlePolicyFileUpload(fileData)
-    } else if (documentType === 'diagnosis') {
-      await handleDiagnosisFileUpload(fileData)
     }
     setSelectedDocumentType(null) // 上傳完成後重置選擇
   }
@@ -433,17 +354,6 @@ export default function MyDataPage() {
     }
   }
 
-  // 刪除診斷證明
-  const handleDeleteDiagnosisCertificate = async (certificateId: string) => {
-    if (!user?.id || !confirm('確定要刪除這筆診斷證明嗎？')) return
-
-    try {
-      await userDataService.deleteDiagnosisCertificate(user.id, certificateId)
-      await loadUserData()
-    } catch (error) {
-      console.error('刪除診斷證明失敗:', error)
-    }
-  }
 
   const handleFileError = (errorMessage: string) => {
     setUploadError(errorMessage)
@@ -458,7 +368,6 @@ export default function MyDataPage() {
       '⚠️ 危險操作：這將永久刪除您的所有資料，包括：\n\n' +
       `• ${medicalRecords.length} 筆病歷記錄\n` +
       `• ${insurancePolicies.length} 筆保險保單\n` +
-      `• ${diagnosisCertificates.length} 筆診斷證明\n` +
       '• 所有 AI 分析結果\n' +
       '• 個人設定\n\n' +
       '此操作無法復原，確定要繼續嗎？'
@@ -501,22 +410,6 @@ export default function MyDataPage() {
     }
   }
 
-  // 儲存編輯的診斷證明資料
-  const handleSaveDiagnosisCertificate = async (certificateId: string, updatedData: any) => {
-    if (!user?.id) return
-    
-    try {
-      const certificate = diagnosisCertificates.find(c => c.id === certificateId)
-      if (certificate) {
-        const updatedCertificate = { ...certificate, diagnosisInfo: updatedData }
-        await userDataService.saveDiagnosisCertificate(user.id, updatedCertificate)
-        await loadUserData()
-        setEditingCertificate(null)
-      }
-    } catch (error) {
-      console.error('儲存診斷證明資料失敗:', error)
-    }
-  }
 
   // 儲存編輯的保單資料
   const handleSaveInsurancePolicy = async (policyId: string, updatedData: any) => {
@@ -606,15 +499,11 @@ export default function MyDataPage() {
           </TabsTrigger>
           <TabsTrigger value="medical" className="gap-2">
             <FileText className="h-4 w-4" />
-            病歷記錄 ({medicalRecords.length})
+            醫療文件 ({medicalRecords.length})
           </TabsTrigger>
           <TabsTrigger value="insurance" className="gap-2">
             <Shield className="h-4 w-4" />
             保險保單 ({insurancePolicies.length})
-          </TabsTrigger>
-          <TabsTrigger value="diagnosis" className="gap-2">
-            <CheckCircle2 className="h-4 w-4" />
-            診斷證明 ({diagnosisCertificates.length})
           </TabsTrigger>
           <TabsTrigger value="upload" className="gap-2">
             <Upload className="h-4 w-4" />
@@ -623,7 +512,7 @@ export default function MyDataPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="bg-blue-50 border-blue-200">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
@@ -648,17 +537,6 @@ export default function MyDataPage() {
               </CardContent>
             </Card>
 
-            <Card className="bg-orange-50 border-orange-200">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-orange-600 text-sm font-medium">診斷證明</p>
-                    <p className="text-2xl font-bold text-orange-900">{stats?.diagnosisCertificates || 0}</p>
-                  </div>
-                  <CheckCircle2 className="h-8 w-8 text-orange-600" />
-                </div>
-              </CardContent>
-            </Card>
 
             <Card className="bg-purple-50 border-purple-200">
               <CardContent className="pt-6">
@@ -687,7 +565,7 @@ export default function MyDataPage() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -758,40 +636,6 @@ export default function MyDataPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-orange-600" />
-                  最近的診斷證明
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {diagnosisCertificates.slice(0, 3).map((certificate) => (
-                  <div key={certificate.id} className="flex items-center justify-between py-2 border-b last:border-b-0">
-                    <div className="flex items-center gap-3">
-                      {certificate.fileType === 'pdf' ? (
-                        <FileText className="h-4 w-4 text-red-500" />
-                      ) : (
-                        <FileImage className="h-4 w-4 text-blue-500" />
-                      )}
-                      <div>
-                        <p className="font-medium text-sm">{getDiagnosisCertificateDisplayTitle(certificate)}</p>
-                        <p className="text-xs text-gray-500">{formatDate(certificate.uploadDate)}</p>
-                        {certificate.fileName !== getDiagnosisCertificateDisplayTitle(certificate) && (
-                          <p className="text-xs text-gray-400">檔案：{certificate.fileName}</p>
-                        )}
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      {formatFileSize(certificate.fileSize)}
-                    </Badge>
-                  </div>
-                ))}
-                {diagnosisCertificates.length === 0 && (
-                  <p className="text-gray-500 text-sm text-center py-4">尚未上傳診斷證明</p>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
           {/* 危險區域 */}
@@ -833,7 +677,7 @@ export default function MyDataPage() {
 
         <TabsContent value="medical" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">病歷記錄</h2>
+            <h2 className="text-xl font-bold">醫療文件</h2>
             <Button onClick={() => setActiveTab("upload")} className="gap-2">
               <Upload className="h-4 w-4" />
               上傳新檔案
@@ -911,11 +755,11 @@ export default function MyDataPage() {
             <Card>
               <CardContent className="py-12 text-center">
                 <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="font-semibold text-gray-900 mb-2">尚未上傳病歷記錄</h3>
-                <p className="text-gray-500 mb-4">上傳您的病歷檔案，讓 AI 幫您分析可申請的資源</p>
+                <h3 className="font-semibold text-gray-900 mb-2">尚未上傳醫療文件</h3>
+                <p className="text-gray-500 mb-4">上傳您的病歷、診斷證明等醫療文件，讓 AI 幫您分析可申請的資源</p>
                 <Button onClick={() => setActiveTab("upload")} className="gap-2">
                   <Upload className="h-4 w-4" />
-                  上傳第一筆病歷
+                  上傳醫療文件
                 </Button>
               </CardContent>
             </Card>
@@ -1053,114 +897,6 @@ export default function MyDataPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="diagnosis" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">診斷證明</h2>
-            <Button onClick={() => setActiveTab("upload")} className="gap-2">
-              <Upload className="h-4 w-4" />
-              上傳新檔案
-            </Button>
-          </div>
-
-          {diagnosisCertificates.map((certificate) => (
-            <Card key={certificate.id}>
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-lg bg-orange-50">
-                      {certificate.fileType === 'pdf' ? (
-                        <FileText className="h-6 w-6 text-red-500" />
-                      ) : (
-                        <FileImage className="h-6 w-6 text-blue-500" />
-                      )}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">{getDiagnosisCertificateDisplayTitle(certificate)}</h3>
-                      {certificate.fileName !== getDiagnosisCertificateDisplayTitle(certificate) && (
-                        <p className="text-xs text-gray-400 mt-0.5">檔案：{certificate.fileName}</p>
-                      )}
-                      <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {formatDate(certificate.uploadDate)}
-                        </span>
-                        <span>{formatFileSize(certificate.fileSize)}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {certificate.fileType.toUpperCase()}
-                        </Badge>
-                      </div>
-                      {certificate.diagnosisInfo && (
-                        <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
-                          <div>
-                            <span className="text-gray-500">診斷日期: </span>
-                            <span className="font-medium">{certificate.diagnosisInfo.certificateDate}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">病名: </span>
-                            <span className="font-medium">{certificate.diagnosisInfo.diseaseName}</span>
-                          </div>
-                          {certificate.diagnosisInfo.treatmentSummary && (
-                            <div className="col-span-2">
-                              <span className="text-gray-500">治療摘要: </span>
-                              <span className="font-medium">{certificate.diagnosisInfo.treatmentSummary}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {certificate.notes && (
-                        <p className="text-sm text-gray-600 mt-2">{certificate.notes}</p>
-                      )}
-                      {certificate.textContent && (
-                        <div className="mt-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setViewingTextContent(certificate.textContent || '')}
-                            className="text-xs gap-1"
-                          >
-                            <FileText className="h-3 w-3" />
-                            查看原始掃描內容
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEditingCertificate(certificate)}
-                    >
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteDiagnosisCertificate(certificate.id)}
-                      className="text-red-600 hover:text-red-700 hover:border-red-300"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-
-          {diagnosisCertificates.length === 0 && (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <CheckCircle2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="font-semibold text-gray-900 mb-2">尚未上傳診斷證明</h3>
-                <p className="text-gray-500 mb-4">上傳您的診斷證明，幫助 AI 進行更精確的分析</p>
-                <Button onClick={() => setActiveTab("upload")} className="gap-2">
-                  <Upload className="h-4 w-4" />
-                  上傳第一筆診斷證明
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
 
         <TabsContent value="upload" className="space-y-6">
           {!selectedDocumentType ? (
@@ -1171,7 +907,7 @@ export default function MyDataPage() {
                 <p className="text-gray-500">請選擇您要上傳的文件類型</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
                 <Card 
                   className="cursor-pointer transition-all hover:border-blue-500 hover:shadow-md"
                   onClick={() => setSelectedDocumentType('medical')}
@@ -1180,9 +916,9 @@ export default function MyDataPage() {
                     <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
                       <FileText className="h-8 w-8 text-blue-600" />
                     </div>
-                    <h3 className="text-lg font-semibold mb-2">病歷記錄</h3>
+                    <h3 className="text-lg font-semibold mb-2">醫療文件</h3>
                     <p className="text-sm text-gray-500 mb-4">
-                      上傳病歷、檢查報告、醫師診療紀錄等醫療文件
+                      上傳病歷、診斷證明、檢查報告、醫師診療紀錄等所有醫療文件
                     </p>
                     <div className="flex items-center justify-center gap-2 text-sm text-blue-600">
                       <span>選擇上傳</span>
@@ -1214,26 +950,6 @@ export default function MyDataPage() {
                   </CardContent>
                 </Card>
 
-                <Card 
-                  className="cursor-pointer transition-all hover:border-orange-500 hover:shadow-md"
-                  onClick={() => setSelectedDocumentType('diagnosis')}
-                >
-                  <CardContent className="pt-8 pb-6 text-center">
-                    <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle2 className="h-8 w-8 text-orange-600" />
-                    </div>
-                    <h3 className="text-lg font-semibold mb-2">診斷證明</h3>
-                    <p className="text-sm text-gray-500 mb-4">
-                      上傳醫師開立的診斷證明書、病假證明等文件
-                    </p>
-                    <div className="flex items-center justify-center gap-2 text-sm text-orange-600">
-                      <span>選擇上傳</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
             </div>
           ) : (
@@ -1329,22 +1045,6 @@ export default function MyDataPage() {
         </div>
       )}
 
-      {editingCertificate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b p-4">
-              <h2 className="text-lg font-semibold">編輯診斷證明</h2>
-            </div>
-            <div className="p-6">
-              <MedicalDataEditor
-                certificate={editingCertificate}
-                onSave={(data) => handleSaveDiagnosisCertificate(editingCertificate.id, data)}
-                onCancel={() => setEditingCertificate(null)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {editingPolicy && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
