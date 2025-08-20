@@ -13,7 +13,11 @@
       "Bash(npm run build:*)",
       "Bash(open:*)",
       "Bash(grep:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(sed:*)",
+      "Bash(for:*)",
+      "Bash(do sed -i '' 's/import.*userDataService.*from \"\"@\\/lib\\/storage\"\"/\\/\\/ import.*userDataService.*from \"\"@\\/lib\\/storage\"\" \\/\\/ 已移除，改用 API/g' \"$file\")",
+      "Bash(done)"
     ],
     "deny": []
   }

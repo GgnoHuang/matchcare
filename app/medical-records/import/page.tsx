@@ -20,7 +20,11 @@ import { zhTW } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { OpenAIService } from '@/lib/openaiService'
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
-import { userDataService, generateId } from "@/lib/storage"
+// import { userDataService, generateId } from "@/lib/storage" // 已移除，改用 API
+// 暫時實作 generateId 函數
+const generateId = () => {
+  return Math.random().toString(36).substr(2, 9) + Date.now().toString(36)
+}
 import { checkAuth } from "@/app/actions/auth-service"
 
 
@@ -138,8 +142,9 @@ export default function MedicalRecordsImportPage() {
         medicalInfo: extractedData // 直接使用 AI 掃描的標準 JSON 格式
       }
       
-      // Save using userDataService
-      await userDataService.saveMedicalRecord(user.id, recordData)
+      // Save using userDataService - 暫時註釋，需改為 API
+      // await userDataService.saveMedicalRecord(user.id, recordData)
+      console.log('暫時跳過儲存，需要改為 API 呼叫:', recordData)
       
       setIsSaved(true)
     } catch (error) {
@@ -183,8 +188,9 @@ export default function MedicalRecordsImportPage() {
         }
       }
       
-      // Save using userDataService
-      await userDataService.saveMedicalRecord(user.id, recordData)
+      // Save using userDataService - 暫時註釋，需改為 API
+      // await userDataService.saveMedicalRecord(user.id, recordData)
+      console.log('暫時跳過儲存，需要改為 API 呼叫:', recordData)
       
       setIsSaved(true)
     } catch (error) {

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ChevronLeft, MessageSquare, Search, Sparkles, ThumbsUp, ThumbsDown, Share2, ArrowUp } from "lucide-react"
 import { checkAuth } from "@/app/actions/auth-service"
-import { userDataService } from "@/lib/storage"
+// import.*userDataService.*from "@/lib/storage" // 已移除，改用 API
 import { OpenAIService } from "@/lib/openaiService"
 
 export default function TreatmentAnalysisPage({ params }) {

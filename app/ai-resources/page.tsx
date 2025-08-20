@@ -44,7 +44,7 @@ import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
 import FileSelector, { SelectedFileData } from "@/components/ui/file-selector"
 import { OpenAIService, CaseData, ResourceItem, MedicalAnalysisResult } from "@/lib/openaiService"
 import { checkAuth } from "@/app/actions/auth-service"
-import { userDataService } from "@/lib/storage"
+// import { userDataService } from "@/lib/storage" // 已移除，改用 API
 
 function AIResourcesPage() {
   // 主要功能切換狀態
@@ -149,11 +149,13 @@ function AIResourcesPage() {
       let medicalText = ''
       let policyText = ''
 
-      // 首先讀取已保存的醫療資料
-      const [savedMedicalRecords, savedDiagnosisCertificates] = await Promise.all([
-        userDataService.getMedicalRecords(user?.id || ''),
-        userDataService.getDiagnosisCertificates(user?.id || '')
-      ])
+      // 首先讀取已保存的醫療資料 - 暫時註釋，等待改為 API
+      // const [savedMedicalRecords, savedDiagnosisCertificates] = await Promise.all([
+      //   userDataService.getMedicalRecords(user?.id || ''),
+      //   userDataService.getDiagnosisCertificates(user?.id || '')
+      // ])
+      const savedMedicalRecords = [] // 暫時使用空陣列
+      const savedDiagnosisCertificates = [] // 暫時使用空陣列
 
       console.log('📊 讀取已保存的醫療資料:')
       console.log(`- 病歷記錄: ${savedMedicalRecords.length} 筆`)

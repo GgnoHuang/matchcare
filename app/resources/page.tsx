@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { checkAuth } from "@/app/actions/auth-service"
-import { userDataService } from "@/lib/storage"
+// import { userDataService.*} from "@/lib/storage" // 已移除，改用 API
 import { OpenAIService } from "@/lib/openaiService"
 
 export default function ResourcesPage() {

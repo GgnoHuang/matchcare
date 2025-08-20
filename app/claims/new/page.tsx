@@ -12,7 +12,7 @@ import { ArrowLeft, CheckCircle2, FileText, Shield, Upload, Loader2, AlertTriang
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { MissingDataIndicator, InlineMissingData, DataQualityIndicator } from "@/components/ui/missing-data-indicator"
 import { checkAuth } from "@/app/actions/auth-service"
-import { userDataService } from "@/lib/storage"
+// import.*userDataService.*from "@/lib/storage" // 已移除，改用 API
 import { 
   transformMedicalRecord, 
   transformInsurancePolicy, 

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Upload, FileText, CheckCircle2, Info, Calendar, Plus, Trash2 } from 'lucide-react'
 import { OpenAIService } from '@/lib/openaiService'
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
-import { userDataService, generateId } from "@/lib/storage"
+// import.*userDataService.*from "@/lib/storage" // 已移除，改用 API
 import { checkAuth } from "@/app/actions/auth-service"
 
 export default function InsuranceImportPage() {

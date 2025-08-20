@@ -10,7 +10,7 @@ import { ArrowLeft, FileText, Shield, Calendar, Banknote, CheckCircle, AlertCirc
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
 import { checkAuth } from "@/app/actions/auth-service"
-import { userDataService } from "@/lib/storage"
+// import.*userDataService.*from "@/lib/storage" // 已移除，改用 API
 import { OpenAIService } from "@/lib/openaiService"
 
 // 20分制評分機制介面
