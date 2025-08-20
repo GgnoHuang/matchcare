@@ -12,8 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Upload, FileText, CheckCircle2, Info, Calendar, Plus, Trash2 } from 'lucide-react'
 import { OpenAIService } from '@/lib/openaiService'
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
-import { userDataService, generateId } from "@/lib/storage"
 import { checkAuth } from "@/app/actions/auth-service"
+import { supabaseConfig } from "@/lib/supabase"
+
+// 生成唯一ID的輔助函數
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+}
 
 export default function InsuranceImportPage() {
   const router = useRouter()
@@ -24,7 +29,7 @@ export default function InsuranceImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [analysisResult, setAnalysisResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
-  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
+  const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string, email: string } | null>(null)
   
   // Manual input form state
   const [formData, setFormData] = useState({
@@ -52,12 +57,12 @@ export default function InsuranceImportPage() {
         } else {
           console.log('用戶未登入')
           // 設置預設用戶以防止錯誤
-          setUser({ id: "guest", name: "訪客用戶" })
+          setUser({ id: "guest", username: "訪客用戶", phoneNumber: "0000000000", email: "guest@example.com" })
         }
       } catch (error) {
         console.error('獲取用戶資訊失敗:', error)
         // 設置預設用戶以防止錯誤
-        setUser({ id: "user1", name: "王小明" })
+        setUser({ id: "user1", username: "王小明", phoneNumber: "0912345678", email: "user1@example.com" })
       }
     }
     fetchUser()
@@ -129,99 +134,242 @@ export default function InsuranceImportPage() {
   }
 
   const handleSubmit = async () => {
-    if (!user?.id) {
+    if (!user?.phoneNumber) {
       setError('請先登入')
       return
     }
 
     try {
-      // Prepare policy data
-      const policyData = {
-        id: generateId(),
-        fileName: 'manual_input',
-        fileType: 'image' as 'image',
-        documentType: 'insurance' as const,
-        uploadDate: new Date().toISOString(),
-        fileSize: 0,
-        textContent: '',
-        policyInfo: {
-          policyBasicInfo: {
-            insuranceCompany: formData.company,
-            policyType: formData.type,
-            policyName: formData.name,
-            policyNumber: formData.number,
-            effectiveDate: formData.startDate,
-            expirationDate: formData.endDate,
-            insuredName: formData.insuredName,
-            beneficiary: formData.beneficiary
-          },
-          coverageDetails: {
-            coverage: coverageItems.filter(item => item.name && item.amount)
+      // 首先取得用戶ID  
+      const { baseUrl, apiKey } = supabaseConfig
+      
+      // 查詢用戶ID
+      const userResponse = await fetch(
+        `${baseUrl}/users_basic?select=id&phonenumber=eq.${encodeURIComponent(user.phoneNumber)}`,
+        {
+          method: "GET",
+          headers: {
+            "apikey": apiKey,
+            "Authorization": `Bearer ${apiKey}`,
+            "Accept": "application/json",
           }
         }
+      )
+      
+      if (!userResponse.ok) {
+        throw new Error('查詢用戶失敗')
       }
       
-      // Save using userDataService
-      await userDataService.saveInsurancePolicy(user.id, policyData)
-      console.log('手動保單保存成功:', policyData)
+      const userData = await userResponse.json()
+      if (userData.length === 0) {
+        throw new Error('找不到用戶記錄')
+      }
+      
+      const userId = userData[0].id
+      
+      const response = await fetch(`${baseUrl}/insurance_policies`, {
+        method: 'POST',
+        headers: {
+          'apikey': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          file_name: 'manual_input.pdf',
+          file_type: 'manual',
+          document_type: 'insurance',
+          upload_date: new Date().toISOString(),
+          file_size: 0,
+          text_content: '',
+          image_base64: '',
+          notes: '手動輸入',
+          
+          // 基本保單資訊
+          policy_basic_insurance_company: formData.company,
+          policy_basic_policy_number: formData.number,
+          policy_basic_effective_date: formData.startDate || null,
+          policy_basic_policy_terms: coverageItems
+            .filter(item => item.name && item.amount)
+            .map(item => `${item.name} ${item.amount}${item.unit}`)
+            .join(', '),
+          policy_basic_insurance_period: formData.startDate && formData.endDate 
+            ? `${formData.startDate} 至 ${formData.endDate}` 
+            : '',
+          
+          // 要保人資訊 (手動輸入時通常留空)
+          holder_name: '',
+          holder_birth_date: null,
+          holder_id_number: '',
+          holder_occupation: '',
+          holder_contact_address: '',
+          
+          // 被保險人資訊
+          insured_name: formData.insuredName,
+          insured_birth_date: null,
+          insured_gender: '',
+          insured_id_number: '',
+          insured_occupation: '',
+          insured_contact_address: '',
+          
+          // 受益人資訊
+          beneficiary_name: formData.beneficiary,
+          beneficiary_relationship: '',
+          beneficiary_benefit_ratio: '',
+          
+          // 保險內容與費用 (手動輸入時通常留空)
+          fees_insurance_amount: '',
+          fees_payment_method: '',
+          fees_payment_period: '',
+          fees_dividend_distribution: '',
+          
+          // 其他事項 (手動輸入時通常留空)
+          other_automatic_premium_loan: '',
+          other_additional_clauses: '',
+          
+          // 保險服務資訊 (手動輸入時通常留空)
+          service_customer_service_hotline: '',
+          service_claims_process_intro: '',
+          
+          created_at: new Date().toISOString()
+        })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`保存失敗 (${response.status}): ${errorText}`)
+      }
+
+      const result = await response.json()
+      console.log('手動保單保存成功:', result)
       
       // 成功保存後重定向到保單頁面
       router.push('/insurance')
     } catch (error) {
       console.error('Error saving policy:', error)
-      setError('保存失敗，請稍後再試')
+      const errorMessage = error instanceof Error ? error.message : '保存失敗，請稍後再試'
+      setError(errorMessage)
     }
   }
   
   const handleAutoNext = async () => {
-    if (!analysisResult || !user?.id) {
+    if (!analysisResult || !user?.phoneNumber) {
       console.error('handleAutoNext 失敗:', { analysisResult, user })
       setError('請先登入或重新分析')
       return
     }
     
     try {
-      // Prepare policy data from AI analysis
-      const policyData = {
-        id: generateId(),
-        fileName: 'ai_analyzed',
-        fileType: 'image' as 'image',
-        documentType: 'insurance' as const,
-        uploadDate: new Date().toISOString(),
-        fileSize: 0,
-        textContent: '',
-        // 儲存 AI 判斷的最高理賠金額（第二階段輸出）
-        maxClaimAmount: analysisResult.analysisResult?.maxClaimAmount || '',
-        maxClaimUnit: analysisResult.analysisResult?.maxClaimUnit || '元',
-        policyInfo: {
-          policyBasicInfo: {
-            insuranceCompany: analysisResult.flatFields?.company || analysisResult.policyInfo?.policyBasicInfo?.insuranceCompany || '',
-            policyType: analysisResult.flatFields?.type || analysisResult.policyInfo?.policyBasicInfo?.policyType || '',
-            policyName: analysisResult.flatFields?.name || analysisResult.policyInfo?.policyBasicInfo?.policyName || '',
-            policyNumber: analysisResult.flatFields?.number || analysisResult.policyInfo?.policyBasicInfo?.policyNumber || '',
-            effectiveDate: analysisResult.flatFields?.startDate || analysisResult.policyInfo?.policyBasicInfo?.effectiveDate || '',
-            expirationDate: analysisResult.flatFields?.endDate || analysisResult.policyInfo?.policyBasicInfo?.expiryDate || '',
-            insuredName: analysisResult.flatFields?.insuredName || analysisResult.policyInfo?.insuredPersonInfo?.name || '',
-            beneficiary: analysisResult.flatFields?.beneficiary || analysisResult.policyInfo?.beneficiaryInfo?.name || ''
-          },
-          coverageDetails: {
-            coverage: analysisResult.policyInfo?.coverageDetails?.coverage || analysisResult.flatFields?.coverage || []
+      // 首先取得用戶ID
+      const { baseUrl, apiKey } = supabaseConfig
+      
+      // 查詢用戶ID
+      const userResponse = await fetch(
+        `${baseUrl}/users_basic?select=id&phonenumber=eq.${encodeURIComponent(user.phoneNumber)}`,
+        {
+          method: "GET",
+          headers: {
+            "apikey": apiKey,
+            "Authorization": `Bearer ${apiKey}`,
+            "Accept": "application/json",
           }
         }
+      )
+      
+      if (!userResponse.ok) {
+        throw new Error('查詢用戶失敗')
       }
       
-      console.log('準備保存保單資料:', policyData)
-      console.log('使用用戶ID:', user.id)
+      const userData = await userResponse.json()
+      if (userData.length === 0) {
+        throw new Error('找不到用戶記錄')
+      }
       
-      // Save using userDataService
-      await userDataService.saveInsurancePolicy(user.id, policyData)
-      console.log('保單保存成功!')
+      const userId = userData[0].id
+      
+      const response = await fetch(`${baseUrl}/insurance_policies`, {
+        method: 'POST',
+        headers: {
+          'apikey': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          file_name: 'ai_analyzed_policy.pdf',
+          file_type: 'image',
+          document_type: 'insurance',
+          upload_date: new Date().toISOString(),
+          file_size: 0,
+          text_content: '',
+          image_base64: '',
+          notes: 'AI自動分析上傳',
+          
+          // 提取AI分析結果
+          policy_basic_insurance_company: analysisResult.flatFields?.company || analysisResult.policyInfo?.policyBasicInfo?.insuranceCompany || '',
+          policy_basic_policy_number: analysisResult.flatFields?.number || analysisResult.policyInfo?.policyBasicInfo?.policyNumber || '',
+          policy_basic_effective_date: (analysisResult.flatFields?.startDate || analysisResult.policyInfo?.policyBasicInfo?.effectiveDate) || null,
+          policy_basic_policy_terms: analysisResult.policyInfo?.policyBasicInfo?.policyTerms || '',
+          policy_basic_insurance_period: (() => {
+            const startDate = analysisResult.flatFields?.startDate || analysisResult.policyInfo?.policyBasicInfo?.effectiveDate || ''
+            const endDate = analysisResult.flatFields?.endDate || analysisResult.policyInfo?.policyBasicInfo?.expiryDate || ''
+            return startDate && endDate ? `${startDate} 至 ${endDate}` : ''
+          })(),
+          
+          // 要保人資訊 (AI通常不會分析這些)
+          holder_name: '',
+          holder_birth_date: null,
+          holder_id_number: '',
+          holder_occupation: '',
+          holder_contact_address: '',
+          
+          // 被保險人資訊
+          insured_name: analysisResult.flatFields?.insuredName || analysisResult.policyInfo?.insuredPersonInfo?.name || '',
+          insured_birth_date: analysisResult.policyInfo?.insuredPersonInfo?.birthDate ? analysisResult.policyInfo?.insuredPersonInfo?.birthDate : null,
+          insured_gender: analysisResult.policyInfo?.insuredPersonInfo?.gender || '',
+          insured_id_number: analysisResult.policyInfo?.insuredPersonInfo?.idNumber || '',
+          insured_occupation: analysisResult.policyInfo?.insuredPersonInfo?.occupation || '',
+          insured_contact_address: analysisResult.policyInfo?.insuredPersonInfo?.contactAddress || '',
+          
+          // 受益人資訊
+          beneficiary_name: analysisResult.flatFields?.beneficiary || analysisResult.policyInfo?.beneficiaryInfo?.name || '',
+          beneficiary_relationship: analysisResult.policyInfo?.beneficiaryInfo?.relationshipToInsured || '',
+          beneficiary_benefit_ratio: analysisResult.policyInfo?.beneficiaryInfo?.benefitRatio || '',
+          
+          // 保險內容與費用 (AI通常不會分析這些)
+          fees_insurance_amount: analysisResult.policyInfo?.insuranceContentAndFees?.insuranceAmount || '',
+          fees_payment_method: analysisResult.policyInfo?.insuranceContentAndFees?.paymentMethod || '',
+          fees_payment_period: analysisResult.policyInfo?.insuranceContentAndFees?.paymentPeriod || '',
+          fees_dividend_distribution: analysisResult.policyInfo?.insuranceContentAndFees?.dividendDistribution || '',
+          
+          // 其他事項 (AI通常不會分析這些)
+          other_automatic_premium_loan: analysisResult.policyInfo?.otherMatters?.automaticPremiumLoan || '',
+          other_additional_clauses: analysisResult.policyInfo?.otherMatters?.additionalClauses || '',
+          
+          // 保險服務資訊 (AI通常不會分析這些)
+          service_customer_service_hotline: analysisResult.policyInfo?.insuranceServiceInfo?.customerServiceHotline || '',
+          service_claims_process_intro: analysisResult.policyInfo?.insuranceServiceInfo?.claimsProcessIntro || '',
+          
+          created_at: new Date().toISOString()
+        })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`保存失敗 (${response.status}): ${errorText}`)
+      }
+
+      const result = await response.json()
+      console.log('AI分析保單保存成功:', result)
       
       // 成功保存後重定向到保單頁面
       router.push('/insurance')
     } catch (error) {
       console.error('Error saving analysis result:', error)
-      setError('保存失敗，請稍後再試')
+      const errorMessage = error instanceof Error ? error.message : '保存失敗，請稍後再試'
+      setError(errorMessage)
     }
   }
 
