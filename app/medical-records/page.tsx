@@ -10,13 +10,13 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { MatchedPoliciesDropdown } from "@/app/components/matched-policies-dropdown"
 import { useMediaQuery } from "@/hooks/use-mobile"
-import { userDataService } from "@/lib/storage"
 import { checkAuth } from "@/app/actions/auth-service"
+import { supabaseConfig } from "@/lib/supabase"
 
 export default function MedicalRecordsPage() {
   const [expandedRecord, setExpandedRecord] = useState<number | null>(null)
   const [medicalRecords, setMedicalRecords] = useState<any[]>([])
-  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
+  const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const isMobile = useMediaQuery("(max-width: 768px)")
 
@@ -42,67 +42,68 @@ export default function MedicalRecordsPage() {
 
   // 當用戶登入後載入病歷資料
   useEffect(() => {
-    if (user?.id) {
+    if (user?.phoneNumber) {
       loadUserMedicalRecords()
     }
   }, [user])
 
   const loadUserMedicalRecords = async () => {
-    if (!user?.id) return
+    if (!user?.phoneNumber) return
     
     try {
-      console.log('載入用戶病歷資料，用戶ID:', user.id)
+      console.log('載入用戶病歷資料，用戶電話:', user.phoneNumber)
       
-      // 先檢查 localStorage 中是否有數據
-      const storageKey = `matchcare_${user.id}_medical_records`
-      const directStorageData = localStorage.getItem(storageKey)
-      console.log('直接從 localStorage 查詢:', storageKey, directStorageData)
-      
-      // 使用 userDataService 載入資料
-      const rawRecords = await userDataService.getMedicalRecords(user.id)
-      console.log('從 userDataService 載入的原始病歷資料:', rawRecords)
-      
-      // 如果 userDataService 沒有數據，但 localStorage 有，可能是服務問題
-      if (rawRecords.length === 0 && directStorageData) {
-        console.warn('userDataService 返回空數據，但 localStorage 有資料，可能是服務問題')
-        try {
-          const parsedDirectData = JSON.parse(directStorageData)
-          console.log('直接解析的 localStorage 數據:', parsedDirectData)
-        } catch (e) {
-          console.error('解析 localStorage 數據失敗:', e)
+      // 透過 Supabase API 搜尋用戶資料
+      const apiUrl = `${supabaseConfig.baseUrl}/users_basic?select=*,medical_records(*)&phonenumber=eq.${user.phoneNumber}`
+      const response = await fetch(apiUrl, {
+        headers: {
+          'apikey': supabaseConfig.apiKey,
+          'Authorization': `Bearer ${supabaseConfig.apiKey}`
         }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`API 請求失敗: ${response.status}`)
       }
       
-      // 將真實資料轉換為UI需要的格式
-      const formattedRecords = rawRecords.map((record, index) => {
-        console.log('處理病歷記錄:', record.fileName, record.medicalInfo);
-        const medicalData = (record.medicalInfo as any) || {}
+      const userData = await response.json()
+      console.log('API 返回用戶資料:', userData)
+      
+      // 提取病歷記錄
+      const rawRecords = userData[0]?.medical_records || []
+      console.log('提取的病歷記錄:', rawRecords)
+      
+      // 將 API 資料轉換為UI需要的格式
+      const formattedRecords = rawRecords.map((record: any, index: number) => {
+        console.log('處理病歷記錄:', record.file_name, record.medical_data)
+        const medicalData = record.medical_data || {}
         
-        // 直接使用標準 JSON 欄位（向下兼容舊格式）
-        const hospital = medicalData.hospitalName || medicalData.hospitalStamp || '未知醫院';
-        const diagnosis = medicalData.diagnosis || medicalData.clinicalRecord || '診斷資料處理中';
-        const treatment = medicalData.treatment || medicalData.surgeryRecord || '治療記錄處理中';
-        const medications = medicalData.medications || medicalData.medicationRecord || '用藥記錄處理中';
-        const department = medicalData.department || '醫療科別';
-        const doctor = medicalData.doctorName || '主治醫師';
+        // 使用 API 資料欄位
+        const hospital = medicalData.hospitalName || '未知醫院'
+        const diagnosis = medicalData.diagnosis || '診斷資料處理中'
+        const treatment = medicalData.treatment || '治療記錄處理中'
+        const medications = medicalData.medications || '用藥記錄處理中'
+        const department = medicalData.department || '醫療科別'
+        const doctor = medicalData.doctorName || '主治醫師'
+        const visitDate = medicalData.visitDate || record.upload_date
         
         return {
           id: record.id || `record_${index + 1}`,
           hospital: hospital,
           department: department,
-          date: record.uploadDate ? new Date(record.uploadDate).toLocaleDateString('zh-TW') : '未知日期',
+          date: visitDate ? new Date(visitDate).toLocaleDateString('zh-TW') : '未知日期',
           diagnosis: diagnosis,
           doctor: doctor,
-          treatments: [treatment],
-          medications: [medications],
+          treatments: treatment.split(',').map((t: string) => t.trim()).filter((t: string) => t),
+          medications: medications.split(',').map((m: string) => m.trim()).filter((m: string) => m),
           hasInsuranceCoverage: true, // 暫時設為true，保持按鈕可用
           matchedPolicies: 1, // 暫時設為1，保持UI一致
           claimSuccessRate: 85, // 暫時設為85%
           matchedPoliciesDetails: [
             { id: 1, company: '分析中', name: '保險匹配分析處理中', type: '醫療險' }
           ],
-          fileName: record.fileName,
-          uploadDate: record.uploadDate,
+          fileName: record.file_name,
+          uploadDate: record.upload_date,
           originalData: record // 保留原始資料供後續使用
         }
       })
@@ -312,7 +313,7 @@ export default function MedicalRecordsPage() {
   console.log('- displayRecords數量:', displayRecords.length)
   console.log('- 當前用戶:', user)
   console.log('- isLoading:', isLoading)
-  console.log('- 儲存Key:', user ? `matchcare_${user.id}_medical_records` : '無用戶')
+  console.log('- 用戶電話:', user?.phoneNumber || '無電話')
 
   // Loading狀態
   if (isLoading) {

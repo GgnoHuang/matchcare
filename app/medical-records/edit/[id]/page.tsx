@@ -16,14 +16,14 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
-import { userDataService } from "@/lib/storage"
 import { checkAuth } from "@/app/actions/auth-service"
+import { supabaseConfig } from "@/lib/supabase"
 
 export default function EditMedicalRecordPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [record, setRecord] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
+  const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
@@ -63,7 +63,7 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
         
         // 載入病歷資料
         if (currentUser) {
-          await loadMedicalRecord(currentUser.id, params.id)
+          await loadMedicalRecord(currentUser.phoneNumber, params.id)
         }
         
       } catch (error) {
@@ -77,11 +77,24 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
     initializePage()
   }, [params.id])
 
-  const loadMedicalRecord = async (userId: string, recordId: string) => {
+  const loadMedicalRecord = async (phoneNumber: string, recordId: string) => {
     try {
-      // 從localStorage讀取用戶病歷
-      const records = await userDataService.getMedicalRecords(userId)
-      const foundRecord = records.find(r => r.id === recordId)
+      // 透過 Supabase API 搜尋用戶資料
+      const apiUrl = `${supabaseConfig.baseUrl}/users_basic?select=*,medical_records(*)&phonenumber=eq.${phoneNumber}`
+      const response = await fetch(apiUrl, {
+        headers: {
+          'apikey': supabaseConfig.apiKey,
+          'Authorization': `Bearer ${supabaseConfig.apiKey}`
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`API 請求失敗: ${response.status}`)
+      }
+      
+      const userData = await response.json()
+      const rawRecords = userData[0]?.medical_records || []
+      const foundRecord = rawRecords.find((r: any) => r.id === recordId)
       
       if (!foundRecord) {
         setError('找不到指定的病歷記錄')
@@ -91,23 +104,23 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
       setRecord(foundRecord)
       console.log('載入的病歷資料:', foundRecord)
       
-      // 填入表單資料 - 使用標準 JSON 格式（向下兼容舊格式）
-      const medicalData = foundRecord.medicalInfo || {}
+      // 填入表單資料 - 使用 API 資料格式
+      const medicalData = foundRecord.medical_data || {}
       
       console.log('編輯頁面載入的病歷資料:', medicalData);
       
-      // 向下兼容：如果是舊格式，轉換成新格式
-      const patientName = medicalData.patientName || medicalData.patientInfo?.name || "";
-      const patientAge = medicalData.patientAge || medicalData.patientInfo?.age || "";
-      const patientGender = medicalData.patientGender || medicalData.patientInfo?.gender || "male";
-      const hospitalName = medicalData.hospitalName || medicalData.hospitalStamp || "";
-      const department = medicalData.department || medicalData.visitInfo?.department || "";
-      const doctorName = medicalData.doctorName || medicalData.visitInfo?.doctor || "";
-      const visitDate = medicalData.visitDate || medicalData.visitInfo?.date;
-      const diagnosis = medicalData.diagnosis || medicalData.clinicalRecord || "";
+      // 使用 API 資料格式
+      const patientName = medicalData.patientName || "";
+      const patientAge = medicalData.patientAge || "";
+      const patientGender = medicalData.patientGender || "male";
+      const hospitalName = medicalData.hospitalName || "";
+      const department = medicalData.department || "";
+      const doctorName = medicalData.doctorName || "";
+      const visitDate = medicalData.visitDate;
+      const diagnosis = medicalData.diagnosis || "";
       const symptoms = medicalData.symptoms || "";
-      const treatment = medicalData.treatment || medicalData.surgeryRecord || "";
-      const medications = medicalData.medications || medicalData.medicationRecord || "";
+      const treatment = medicalData.treatment || "";
+      const medications = medicalData.medications || "";
       const notes = medicalData.notes || "";
       const isFirstOccurrence = medicalData.isFirstOccurrence || "unknown";
       const medicalExam = medicalData.medicalExam || "";
@@ -145,37 +158,52 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!user?.id || !record) {
+    if (!user?.phoneNumber || !record) {
       setError('請先登入或重新載入頁面')
       return
     }
 
     try {
-      // 使用標準 JSON 格式更新病歷資料
-      const updatedRecord = {
-        ...record,
-        medicalInfo: {
-          patientName: formData.patientName,
-          patientAge: formData.patientAge,
-          patientGender: formData.patientGender,
-          hospitalName: formData.hospitalName,
-          department: formData.department,
-          doctorName: formData.doctorName,
-          visitDate: formData.visitDate ? formData.visitDate.toISOString().split('T')[0] : "",
-          isFirstOccurrence: formData.isFirstOccurrence,
-          medicalExam: formData.medicalExam,
-          diagnosis: formData.diagnosis,
-          symptoms: formData.symptoms,
-          treatment: formData.treatment,
-          medications: formData.medications,
-          notes: formData.notes
-        }
+      // 準備更新的 medical_data
+      const updatedMedicalData = {
+        patientName: formData.patientName,
+        patientAge: formData.patientAge,
+        patientGender: formData.patientGender,
+        hospitalName: formData.hospitalName,
+        department: formData.department,
+        doctorName: formData.doctorName,
+        visitDate: formData.visitDate ? formData.visitDate.toISOString().split('T')[0] : "",
+        isFirstOccurrence: formData.isFirstOccurrence,
+        medicalExam: formData.medicalExam,
+        diagnosis: formData.diagnosis,
+        symptoms: formData.symptoms,
+        treatment: formData.treatment,
+        medications: formData.medications,
+        notes: formData.notes,
+        imageBase64: null
       }
 
-      // 保存更新的病歷
-      await userDataService.saveMedicalRecord(user.id, updatedRecord)
+      // 透過 Supabase API 更新病歷資料
+      const updateUrl = `${supabaseConfig.baseUrl}/medical_records?id=eq.${record.id}`
+      const response = await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseConfig.apiKey,
+          'Authorization': `Bearer ${supabaseConfig.apiKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          medical_data: updatedMedicalData,
+          notes: formData.notes
+        })
+      })
       
-      console.log("保存病歷資料:", updatedRecord)
+      if (!response.ok) {
+        throw new Error(`更新失敗: ${response.status}`)
+      }
+      
+      console.log("保存病歷資料:", updatedMedicalData)
       
       // 返回病歷管理頁面
       router.push("/medical-records")
@@ -187,14 +215,27 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
   }
 
   const handleDelete = async () => {
-    if (!user?.id || !record) {
+    if (!user?.phoneNumber || !record) {
       setError('請先登入或重新載入頁面')
       return
     }
 
     if (confirm("確定要刪除此病歷記錄嗎？此操作無法復原。")) {
       try {
-        await userDataService.deleteMedicalRecord(user.id, params.id)
+        // 透過 Supabase API 刪除病歷
+        const deleteUrl = `${supabaseConfig.baseUrl}/medical_records?id=eq.${params.id}`
+        const response = await fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: {
+            'apikey': supabaseConfig.apiKey,
+            'Authorization': `Bearer ${supabaseConfig.apiKey}`
+          }
+        })
+        
+        if (!response.ok) {
+          throw new Error(`刪除失敗: ${response.status}`)
+        }
+        
         console.log("刪除病歷:", params.id)
         router.push("/medical-records")
       } catch (error) {
