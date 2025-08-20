@@ -1,36 +1,36 @@
 "use server"
 
 import { cookies } from "next/headers"
+import { loginOrRegisterUser } from "@/lib/supabase"
 
-// 用戶資料
-const demoUsers = [
-  {
-    id: "user1",
-    name: "王小明",
-    phoneNumber: "0912345678",
-    email: "user@example.com",
-  },
-]
+// 登入/註冊功能 - 使用 Supabase
+export async function loginUser(phoneNumber: string, password: string) {
+  try {
+    const result = await loginOrRegisterUser(phoneNumber, password)
+    
+    if (!result.success) {
+      return { success: false, error: result.error }
+    }
 
-// 快速登入功能
-export async function quickLogin(phoneNumber = "0912345678") {
-  // 使用預設用戶資料，但允許自定義電話號碼
-  const user = {
-    ...demoUsers[0],
-    phoneNumber,
+    // 設置身份驗證 cookie (24 小時有效)
+    const cookieStore = await cookies()
+    cookieStore.set("auth", JSON.stringify(result.user), {
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      path: "/",
+    })
+
+    return { 
+      success: true, 
+      user: result.user,
+      isNewUser: !result.isLogin // 如果是註冊則為新用戶
+    }
+  } catch (error) {
+    console.error("登入失敗:", error)
+    return { success: false, error: "登入過程中發生錯誤" }
   }
-
-  // 設置身份驗證 cookie (24 小時有效)
-  const cookieStore = await cookies()
-  cookieStore.set("auth", JSON.stringify(user), {
-    expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    path: "/",
-  })
-
-  return { success: true, user }
 }
 
-// 檢查用戶是否已登入
+// 檢查用戶是否已登入 - 保持現有邏輯
 export async function checkAuth() {
   try {
     const cookieStore = await cookies()
@@ -58,7 +58,7 @@ export async function checkAuth() {
   }
 }
 
-// 登出
+// 登出 - 保持現有邏輯
 export async function logout() {
   try {
     const cookieStore = await cookies()
@@ -70,20 +70,18 @@ export async function logout() {
   }
 }
 
-// 發送 OTP (模擬)
-export async function sendOTP(phoneNumber: string) {
-  // 這裡只是模擬發送 OTP，實際上直接返回成功
-  console.log(`模擬向 ${phoneNumber} 發送 OTP`)
-  return { success: true }
+// 廢除的功能 - 保持兼容性但不再使用
+export async function quickLogin(phoneNumber = "0912345678") {
+  console.warn("quickLogin 已廢除，請使用 loginUser")
+  return { success: false, error: "此功能已廢除" }
 }
 
-// 驗證 OTP (模擬)
+export async function sendOTP(phoneNumber: string) {
+  console.warn("sendOTP 已廢除")
+  return { success: false, error: "此功能已廢除" }
+}
+
 export async function verifyOTP(phoneNumber: string, otp: string, action: string) {
-  // 這裡只是模擬驗證 OTP，實際上直接返回成功並登入用戶
-  console.log(`模擬驗證 ${phoneNumber} 的 OTP: ${otp}`)
-
-  // 直接登入用戶
-  await quickLogin(phoneNumber)
-
-  return { success: true }
+  console.warn("verifyOTP 已廢除")
+  return { success: false, error: "此功能已廢除" }
 }

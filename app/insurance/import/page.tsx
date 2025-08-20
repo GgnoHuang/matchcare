@@ -50,13 +50,9 @@ export default function InsuranceImportPage() {
         if (isLoggedIn && authUser) {
           setUser(authUser)
         } else {
-          // 如果未登入，使用快速登入功能
-          const mockAuth = await import("@/app/actions/auth-service")
-          const result = await mockAuth.quickLogin()
-          if (result.success) {
-            setUser(result.user)
-            console.log('自動登入成功:', result.user)
-          }
+          console.log('用戶未登入')
+          // 設置預設用戶以防止錯誤
+          setUser({ id: "guest", name: "訪客用戶" })
         }
       } catch (error) {
         console.error('獲取用戶資訊失敗:', error)

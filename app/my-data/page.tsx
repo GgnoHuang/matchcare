@@ -569,7 +569,7 @@ export default function MyDataPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">我的資料管理</h1>
           <p className="text-gray-500 mt-1">管理您的病歷記錄和保險保單</p>
           <div className="flex items-center gap-2 mt-2">
-            <Badge variant="outline">{user.name}</Badge>
+            <Badge variant="outline">{user.username}</Badge>
             <Badge variant="secondary" className="text-xs">
               儲存空間: {stats ? formatFileSize(stats.totalStorageUsed) : '計算中...'}
             </Badge>

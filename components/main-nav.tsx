@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Shield, Menu, X, User, LogOut, Sparkles, FileText } from "lucide-react"
 import { usePathname } from "next/navigation"
-import { checkAuth, logout, quickLogin } from "@/app/actions/auth-service"
+import { checkAuth, logout } from "@/app/actions/auth-service"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +20,7 @@ export function MainNav() {
   const router = useRouter()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const pathname = usePathname()
-  const [user, setUser] = useState<{ name: string; phoneNumber?: string; email?: string } | null>(null)
+  const [user, setUser] = useState<{ username: string; name?: string; phoneNumber?: string; email?: string } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [subscription, setSubscription] = useState<any>(null)
 
@@ -80,20 +80,6 @@ export function MainNav() {
     }
   }
 
-  const handleQuickLogin = async () => {
-    try {
-      setIsLoading(true)
-      const result = await quickLogin()
-      if (result.success) {
-        // 使用 window.location 而不是 router.push 確保頁面完全重新加載
-        window.location.href = "/"
-      }
-    } catch (error) {
-      console.error("登入失敗:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // 主要功能項目
   const primaryNavItems = [
@@ -212,7 +198,7 @@ export function MainNav() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-2 bg-transparent">
                     <User className="h-4 w-4" />
-                    {user.name}
+                    {user.username}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -232,14 +218,8 @@ export function MainNav() {
             </>
           ) : (
             <>
-              <Button variant="outline" size="sm" onClick={handleQuickLogin}>
-                快速體驗登入
-              </Button>
               <Button variant="outline" size="sm" onClick={() => router.push("/login")}>
-                登入
-              </Button>
-              <Button size="sm" className="bg-teal-600 hover:bg-teal-700" onClick={() => router.push("/register")}>
-                註冊
+                登入/註冊
               </Button>
             </>
           )}
@@ -311,7 +291,7 @@ export function MainNav() {
                 <>
                   <div className="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-md">
                     <User className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm font-medium">{user.name}</span>
+                    <span className="text-sm font-medium">{user.username}</span>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => router.push("/my-data")}>
                     我的資料
@@ -334,14 +314,8 @@ export function MainNav() {
                 </>
               ) : (
                 <>
-                  <Button variant="outline" className="w-full bg-transparent" onClick={handleQuickLogin}>
-                    快速體驗登入
-                  </Button>
                   <Button variant="outline" className="w-full bg-transparent" onClick={() => router.push("/login")}>
-                    登入
-                  </Button>
-                  <Button className="w-full bg-teal-600 hover:bg-teal-700" onClick={() => router.push("/register")}>
-                    註冊
+                    登入/註冊
                   </Button>
                 </>
               )}

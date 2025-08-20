@@ -55,18 +55,9 @@ export default function EditInsurancePage({ params }: { params: { id: string } }
           setUser(authUser)
           currentUser = authUser
         } else {
-          console.log('用戶未登入，嘗試自動登入')
-          // 如果未登入，使用快速登入功能
-          const mockAuth = await import("@/app/actions/auth-service")
-          const result = await mockAuth.quickLogin()
-          if (result.success) {
-            setUser(result.user)
-            currentUser = result.user
-            console.log('自動登入成功:', result.user)
-          } else {
-            setError('登入失敗，請重新整理頁面')
-            return
-          }
+          console.log('用戶未登入')
+          setError('請先登入再使用此功能')
+          return
         }
         
         // 載入保單資料
