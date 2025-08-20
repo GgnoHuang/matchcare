@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { checkAuth } from "@/app/actions/auth-service"
-import { userDataService } from "@/lib/storage"
+import { getUserPolicies, updatePolicy } from "@/lib/supabaseDataService"
 
 interface CoverageItem {
   id: string
@@ -26,7 +26,7 @@ export default function EditInsurancePage({ params }: { params: { id: string } }
   const [policy, setPolicy] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
+  const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string, email?: string } | null>(null)
 
   // Form data state
   const [formData, setFormData] = useState({
@@ -61,8 +61,8 @@ export default function EditInsurancePage({ params }: { params: { id: string } }
         }
         
         // 載入保單資料
-        if (currentUser) {
-          await loadPolicyData(currentUser.id, params.id)
+        if (currentUser?.phoneNumber) {
+          await loadPolicyData(currentUser.phoneNumber, params.id)
         }
         
       } catch (error) {
@@ -76,14 +76,22 @@ export default function EditInsurancePage({ params }: { params: { id: string } }
     initializePage()
   }, [params.id])
 
-  const loadPolicyData = async (userId: string, policyId: string) => {
+  const loadPolicyData = async (phoneNumber: string, policyId: string) => {
     try {
-      // 從localStorage讀取用戶保單
-      const policies = await userDataService.getInsurancePolicies(userId)
-      const foundPolicy = policies.find(p => p.id === policyId)
+      // 從 Supabase 讀取用戶保單
+      const result = await getUserPolicies(phoneNumber)
+      
+      if (!result.success) {
+        setError(`載入保單失敗: ${result.error}`)
+        return
+      }
+      
+      const foundPolicy = result.policies.find(p => p.id === policyId)
       
       if (!foundPolicy) {
         setError('找不到指定的保單')
+        console.log('可用的保單 IDs:', result.policies.map(p => p.id))
+        console.log('尋找的 ID:', policyId)
         return
       }
       
@@ -143,44 +151,32 @@ export default function EditInsurancePage({ params }: { params: { id: string } }
   }
 
   const handleSave = async () => {
-    if (!user?.id || !policy) {
+    if (!user?.phoneNumber || !policy) {
       setError('請先登入或重新載入頁面')
       return
     }
 
     try {
-      // 準備更新的保單資料
-      const updatedPolicy = {
-        ...policy,
-        policyInfo: {
-          ...policy.policyInfo,
-          policyBasicInfo: {
-            insuranceCompany: formData.company,
-            policyType: formData.policyType,
-            policyName: formData.policyName,
-            policyNumber: formData.policyNumber,
-            effectiveDate: formData.startDate,
-            expirationDate: formData.endDate,
-            insuredName: formData.insuredPerson,
-            beneficiary: formData.beneficiary
-          },
-          coverageDetails: {
-            coverage: coverageItems.filter(item => item.name && item.amount).map(item => ({
-              name: item.name,
-              amount: item.amount,
-              unit: item.unit
-            }))
-          }
-        }
+      // 準備 Supabase 更新資料格式
+      const updateData = {
+        policy_basic_insurance_company: formData.company,
+        policy_basic_policy_number: formData.policyNumber,
+        policy_basic_effective_date: formData.startDate,
+        policy_basic_insurance_period: formData.startDate && formData.endDate ? `${formData.startDate} 至 ${formData.endDate}` : '',
+        insured_name: formData.insuredPerson,
+        beneficiary_name: formData.beneficiary
       }
 
-      // 保存更新的保單
-      await userDataService.saveInsurancePolicy(user.id, updatedPolicy)
+      // 更新 Supabase 中的保單
+      const result = await updatePolicy(policy.id, updateData)
       
-      console.log("保存保單資料:", updatedPolicy)
-      
-      // 返回保單總覽頁面
-      router.push("/insurance")
+      if (result.success) {
+        console.log("保存保單資料成功:", result.policy)
+        // 返回保單總覽頁面
+        router.push("/insurance")
+      } else {
+        setError(`保存失敗: ${result.error}`)
+      }
       
     } catch (error) {
       console.error('保存失敗:', error)

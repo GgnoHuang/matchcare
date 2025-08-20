@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useState, useEffect } from "react"
 import { checkAuth } from "@/app/actions/auth-service"
-import { userDataService } from "@/lib/storage"
+import { getUserPolicies } from "@/lib/supabaseDataService"
 
 interface InsurancePolicy {
   id: string
@@ -35,7 +35,9 @@ interface InsurancePolicy {
 
 interface User {
   id: string
-  name: string
+  username: string
+  phoneNumber: string
+  email?: string
 }
 
 export default function InsurancePage() {
@@ -53,21 +55,13 @@ export default function InsurancePage() {
           setUser(authUser)
           console.log('用戶已登入:', authUser)
         } else {
-          console.log('用戶未登入，嘗試自動登入')
-          // 如果未登入，使用快速登入功能
-          const mockAuth = await import("@/app/actions/auth-service")
-          const result = await mockAuth.quickLogin()
-          if (result.success) {
-            setUser(result.user)
-            console.log('自動登入成功:', result.user)
-          } else {
-            console.log('自動登入失敗')
-          }
+          console.log('用戶未登入')
+          setUser(null)
         }
       } catch (error) {
         console.error('獲取用戶資訊失敗:', error)
         // 設置預設用戶以防止錯誤
-        setUser({ id: "user1", name: "王小明" })
+        setUser(null)
       } finally {
         setIsLoading(false)
       }
@@ -82,116 +76,115 @@ export default function InsurancePage() {
     }
   }, [user])
 
-  // 載入用戶保單和病歷資料
+  // 載入用戶保單資料
   const loadUserData = async () => {
-    if (!user?.id) return
+    if (!user?.phoneNumber) return
     
     try {
-      console.log('載入用戶保單和病歷資料，用戶ID:', user.id)
+      console.log('載入用戶保單資料，電話號碼:', user.phoneNumber)
       
-      // 並行載入保單和病歷資料
-      const [rawPolicies, rawMedicalRecords] = await Promise.all([
-        userDataService.getInsurancePolicies(user.id),
-        userDataService.getMedicalRecords(user.id)
-      ])
+      // 從 Supabase 載入保單資料
+      const result = await getUserPolicies(user.phoneNumber)
       
-      console.log('從 userDataService 載入的原始保單資料:', rawPolicies)
-      console.log('從 userDataService 載入的原始病歷資料:', rawMedicalRecords)
-      
-      setMedicalRecords(rawMedicalRecords)
-      
-      // 將真實保單資料轉換為UI需要的格式
-      const formattedPolicies: InsurancePolicy[] = rawPolicies.map((policy, index) => {
-        console.log('處理保單記錄:', policy.fileName, policy.policyInfo);
-        const policyData = policy.policyInfo?.policyBasicInfo || {}
-        const coverageData = policy.policyInfo?.coverageDetails || {}
+      if (result.success) {
+        console.log('從 Supabase 載入的保單資料:', result.policies)
         
-        // 提取保單名稱，優先使用AI識別的名稱
-        let policyName = '保險保單';
-        if (policyData.policyName && policyData.policyName !== '待輸入') {
-          policyName = policyData.policyName;
-        } else if (policy.fileName) {
-          policyName = policy.fileName.replace(/\.(pdf|jpg|jpeg|png)$/i, '');
-        }
+        // 將 Supabase 資料轉換為UI需要的格式
+        const formattedPolicies: InsurancePolicy[] = result.policies.map((policy: any, index: number) => {
+          console.log('處理保單記錄:', policy.fileName, policy.policyInfo);
+          const policyData = policy.policyInfo?.policyBasicInfo || {}
+          
+          // 提取保單名稱
+          let policyName = '保險保單';
+          if (policy.fileName) {
+            policyName = policy.fileName.replace(/\.(pdf|jpg|jpeg|png)$/i, '');
+          }
+          
+          // 提取保險公司
+          let company = '未知保險公司';
+          if (policyData.insuranceCompany && policyData.insuranceCompany !== '待輸入') {
+            company = policyData.insuranceCompany;
+          }
+          
+          // 從保單條款中解析保險類型
+          let policyType = '醫療險'; // 預設類型
+          if (policyData.policyTerms) {
+            if (policyData.policyTerms.includes('意外')) {
+              policyType = '意外險';
+            } else if (policyData.policyTerms.includes('重大疾病') || policyData.policyTerms.includes('癌症') || policyData.policyTerms.includes('心臟病')) {
+              policyType = '重疾險';
+            }
+          } 
+          
+          // 提取保單號碼
+          let policyNumber = '待補充';
+          if (policyData.policyNumber && policyData.policyNumber !== '待輸入') {
+            policyNumber = policyData.policyNumber;
+          }
+          
+          // 從保單條款中解析保障內容
+          let coverage: Array<{type: string, amount: number, unit: string}> = [];
+          
+          if (policyData.policyTerms && policyData.policyTerms !== '待輸入') {
+            // 解析保單條款，支援多種格式
+            // 例如: "住院醫療 5,000元/日(最多365天), 加護病房 10,000元/日(最多30天), 手術費用 150,000元/次"
+            const terms = policyData.policyTerms.split(',');
+            coverage = terms.map((term: string) => {
+              const cleanTerm = term.trim();
+              
+              // 匹配格式: "住院醫療 5,000元/日(最多365天)" 或 "手術費用 150,000元/次"
+              const match = cleanTerm.match(/(.+?)\s+([\d,]+)\s*(.+?)(?:\(.*?\))?$/);
+              if (match) {
+                return {
+                  type: match[1].trim(),
+                  amount: parseInt(match[2].replace(/,/g, '')),
+                  unit: match[3].trim()
+                };
+              }
+              
+              // 備用匹配: 只有項目名稱，無金額
+              return { type: cleanTerm, amount: 0, unit: '元' };
+            });
+          }
+          
+          // 如果沒有保障項目，顯示預設訊息
+          if (coverage.length === 0) {
+            coverage = [{ type: '保障內容處理中', amount: 0, unit: '元' }];
+          }
+          
+          // 計算最高理賠金額//已棄用
+          // const maxClaimAmount = Math.max(...coverage.map((c: any) => c.amount));
+          // const maxClaimUnit = '元';
+
+          const top = coverage.reduce((max, cur) => (cur.amount > max.amount ? cur : max), coverage[0])
+          const maxClaimAmount = top?.amount ?? 0
+          const maxClaimUnit = top?.unit ?? '元'
+
+          
+          return {
+            id: policy.id || `policy_${index + 1}`,
+            company: company,
+            name: policyName,
+            type: policyType,
+            policyNumber: policyNumber,
+            startDate: policyData.effectiveDate,
+            endDate: policyData.insurancePeriod?.split(' 至 ')[1],
+            coverage: coverage,
+            maxClaimAmount: maxClaimAmount,
+            maxClaimUnit: maxClaimUnit,
+            matchedRecords: 0, // 暫時設為0
+            fileName: policy.fileName,
+            uploadDate: policy.uploadDate,
+            originalData: policy
+          };
+        });
         
-        // 提取保險公司
-        let company = '未知保險公司';
-        if (policyData.insuranceCompany && policyData.insuranceCompany !== '待輸入') {
-          company = policyData.insuranceCompany;
-        }
-        
-        // 提取保險類型
-        let policyType = '未知類型';
-        if (policyData.policyType && policyData.policyType !== '待輸入') {
-          policyType = policyData.policyType;
-        }
-        
-        // 提取保單號碼
-        let policyNumber = '待補充';
-        if (policyData.policyNumber && policyData.policyNumber !== '待輸入') {
-          policyNumber = policyData.policyNumber;
-        }
-        
-        // 提取保障內容 - 使用真實的 coverageDetails.coverage 資料
-        let coverage = [];
-        
-        if (coverageData.coverage && Array.isArray(coverageData.coverage)) {
-          // 將真實的保障項目資料轉換為顯示格式
-          coverage = coverageData.coverage
-            .filter(item => item.name && item.name.trim() !== '') // 只要有 name 且不是空字串
-            .map(item => ({
-              type: item.name, // 使用項目名稱
-              amount: (item.amount && item.amount.trim() !== '') ? item.amount : null, // amount 不是空字串才使用
-              unit: (item.unit && item.unit.trim() !== '') ? item.unit : null // unit 不是空字串才使用
-            }));
-        }
-        
-        // 如果沒有保障項目，顯示預設訊息
-        if (coverage.length === 0) {
-          coverage = [{ type: '保障內容處理中', amount: 0, unit: '元' }];
-        }
-        
-        // 計算匹配病歷數量（暫時設為0，後續可實作真實匹配邏輯）
-        const matchedRecords = 0;
-        
-        // 提取 AI 判斷的最高理賠金額（從 AI 分析結果中取得）
-        let maxClaimAmount = 0;
-        let maxClaimUnit = '元';
-        
-        // 先嘗試從 AI 分析結果取得最高理賠金額
-        if (policy.maxClaimAmount && policy.maxClaimUnit) {
-          maxClaimAmount = parseFloat(policy.maxClaimAmount) || 0;
-          maxClaimUnit = policy.maxClaimUnit;
-        } else if (policy.analysisResult?.maxClaimAmount) {
-          // 備用：從 analysisResult 中取得
-          maxClaimAmount = parseFloat(policy.analysisResult.maxClaimAmount) || 0;
-          maxClaimUnit = policy.analysisResult.maxClaimUnit || '元';
-        } else if (coverage.length > 0) {
-          // 最後備用：使用舊方法計算最大值
-          maxClaimAmount = Math.max(...coverage.map(c => c.amount));
-          maxClaimUnit = '元';
-        }
-        
-        return {
-          id: policy.id || `policy_${index + 1}`,
-          company: company,
-          name: policyName,
-          type: policyType,
-          policyNumber: policyNumber,
-          startDate: policyData.effectiveDate || '未知',
-          endDate: policyData.expiryDate || '未知', 
-          coverage: coverage,
-          maxClaimAmount: maxClaimAmount, // 新增：AI 判斷的最高理賠金額
-          maxClaimUnit: maxClaimUnit, // 新增：AI 判斷的最高理賠金額單位
-          matchedRecords: matchedRecords,
-          fileName: policy.fileName,
-          uploadDate: policy.uploadDate,
-          originalData: policy // 保留原始資料供 getPolicyDisplayTitle 使用
-        };
-      });
-      
-      setInsurancePolicies(formattedPolicies)
-      console.log('最終格式化的保單資料:', formattedPolicies)
+        setInsurancePolicies(formattedPolicies);
+        console.log('格式化後的保單資料:', formattedPolicies);
+      } else {
+        console.error('載入保單失敗:', result.error);
+        setInsurancePolicies([]);
+      }
     } catch (error) {
       console.error('載入保單資料失敗:', error)
       setInsurancePolicies([])
@@ -431,17 +424,8 @@ export default function InsurancePage() {
                     <div>
                       <p className="text-sm font-medium">主要保障</p>
                       <p className="text-sm text-gray-500">
-                        {policy.coverage
-                          .slice(0, 2)
-                          .map((c) => {
-                            let display = c.type;
-                            if (c.amount !== null && c.unit !== null) {
-                              display += ` ${c.amount}${c.unit}`;
-                            }
-                            return display;
-                          })
-                          .join(", ")}
-                        {policy.coverage.length > 2 ? "..." : ""}
+                         {policy.originalData?.policyInfo?.policyBasicInfo?.policyTerms || "未提供"}
+
                       </p>
                     </div>
                   </div>
@@ -557,17 +541,8 @@ export default function InsurancePage() {
                       <div>
                         <p className="text-sm font-medium">主要保障</p>
                         <p className="text-sm text-gray-500">
-                          {policy.coverage
-                            .slice(0, 2)
-                            .map((c) => {
-                            let display = c.type;
-                            if (c.amount !== null && c.unit !== null) {
-                              display += ` ${c.amount}${c.unit}`;
-                            }
-                            return display;
-                          })
-                            .join(", ")}
-                          {policy.coverage.length > 2 ? "..." : ""}
+                           {policy.originalData?.policyInfo?.policyBasicInfo?.policyTerms || "未提供"}
+
                         </p>
                       </div>
                     </div>
@@ -681,17 +656,9 @@ export default function InsurancePage() {
                       <div>
                         <p className="text-sm font-medium">主要保障</p>
                         <p className="text-sm text-gray-500">
-                          {policy.coverage
-                            .slice(0, 2)
-                            .map((c) => {
-                            let display = c.type;
-                            if (c.amount !== null && c.unit !== null) {
-                              display += ` ${c.amount}${c.unit}`;
-                            }
-                            return display;
-                          })
-                            .join(", ")}
-                          {policy.coverage.length > 2 ? "..." : ""}
+                           {policy.originalData?.policyInfo?.policyBasicInfo?.policyTerms || "未提供"}
+
+                          
                         </p>
                       </div>
                     </div>
@@ -805,17 +772,8 @@ export default function InsurancePage() {
                       <div>
                         <p className="text-sm font-medium">主要保障</p>
                         <p className="text-sm text-gray-500">
-                          {policy.coverage
-                            .slice(0, 2)
-                            .map((c) => {
-                            let display = c.type;
-                            if (c.amount !== null && c.unit !== null) {
-                              display += ` ${c.amount}${c.unit}`;
-                            }
-                            return display;
-                          })
-                            .join(", ")}
-                          {policy.coverage.length > 2 ? "..." : ""}
+                           {policy.originalData?.policyInfo?.policyBasicInfo?.policyTerms || "未提供"}
+
                         </p>
                       </div>
                     </div>
