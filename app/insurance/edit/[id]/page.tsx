@@ -264,8 +264,20 @@ export default function EditInsurancePage({ params }: { params: { id: string } }
       </div>
 
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">編輯保單</h1>
-        <p className="text-gray-500 mb-8">修改您的保險保單資訊</p>
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight mb-2">編輯保單</h1>
+            <p className="text-gray-500">修改您的保險保單資訊</p>
+          </div>
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            className="gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            刪除保單
+          </Button>
+        </div>
 
         <Card>
           <CardHeader>
@@ -462,23 +474,13 @@ export default function EditInsurancePage({ params }: { params: { id: string } }
               </div>
             </div>
           </CardContent>
-          <CardFooter className="flex justify-between">
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              className="gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              刪除保單
+          <CardFooter className="flex justify-end gap-2">
+            <Button variant="outline" asChild className="bg-transparent">
+              <Link href="/insurance">取消</Link>
             </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" asChild className="bg-transparent">
-                <Link href="/insurance">取消</Link>
-              </Button>
-              <Button onClick={handleSave} className="bg-teal-600 hover:bg-teal-700">
-                保存編輯
-              </Button>
-            </div>
+            <Button onClick={handleSave} className="bg-teal-600 hover:bg-teal-700">
+              保存編輯
+            </Button>
           </CardFooter>
         </Card>
       </div>

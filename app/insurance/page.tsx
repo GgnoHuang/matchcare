@@ -179,8 +179,15 @@ export default function InsurancePage() {
           };
         });
         
-        setInsurancePolicies(formattedPolicies);
-        console.log('格式化後的保單資料:', formattedPolicies);
+        // 按照新到舊排序（最新的在前面）
+        const sortedPolicies = formattedPolicies.sort((a: InsurancePolicy, b: InsurancePolicy) => {
+          const dateA = new Date(a.originalData?.upload_date || a.uploadDate || 0)
+          const dateB = new Date(b.originalData?.upload_date || b.uploadDate || 0)
+          return dateB.getTime() - dateA.getTime()
+        })
+        
+        setInsurancePolicies(sortedPolicies);
+        console.log('格式化後的保單資料:', sortedPolicies);
       } else {
         console.error('載入保單失敗:', result.error);
         setInsurancePolicies([]);
@@ -460,11 +467,6 @@ export default function InsurancePage() {
                         檢查理賠資格
                       </Button>
                     </Link> */}
-                    <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
-                      <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
-                        申請理賠
-                      </Button>
-                    </Link>
                   </div>
                 </div>
               </CardFooter>
@@ -577,11 +579,6 @@ export default function InsurancePage() {
                           檢查理賠資格
                         </Button>
                       </Link> */}
-                      <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
-                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
-                          申請理賠
-                        </Button>
-                      </Link>
                     </div>
                   </div>
                 </CardFooter>
@@ -693,11 +690,6 @@ export default function InsurancePage() {
                           檢查理賠資格
                         </Button>
                       </Link> */}
-                      <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
-                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
-                          申請理賠
-                        </Button>
-                      </Link>
                     </div>
                   </div>
                 </CardFooter>
@@ -808,11 +800,6 @@ export default function InsurancePage() {
                           檢查理賠資格
                         </Button>
                       </Link> */}
-                      <Link href={`/claims/new?policy=${policy.id}`} className="w-full sm:w-auto">
-                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
-                          申請理賠
-                        </Button>
-                      </Link>
                     </div>
                   </div>
                 </CardFooter>

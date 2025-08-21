@@ -307,8 +307,21 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
       </div>
 
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">編輯病歷記錄</h1>
-        <p className="text-gray-500 mb-8">修改您的病歷記錄資訊</p>
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight mb-2">編輯病歷記錄</h1>
+            <p className="text-gray-500">修改您的病歷記錄資訊</p>
+          </div>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleDelete}
+            className="gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            刪除病歷
+          </Button>
+        </div>
 
         <form onSubmit={handleSave} className="space-y-6">
           {/* Patient Information */}
@@ -547,24 +560,13 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
           </Card>
 
           {/* Action Buttons */}
-          <div className="flex justify-between">
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleDelete}
-              className="gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              刪除病歷
+          <div className="flex justify-end gap-4">
+            <Button type="button" variant="outline" onClick={() => router.back()} className="bg-transparent">
+              取消
             </Button>
-            <div className="flex gap-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} className="bg-transparent">
-                取消
-              </Button>
-              <Button type="submit" className="bg-teal-600 hover:bg-teal-700">
-                保存編輯
-              </Button>
-            </div>
+            <Button type="submit" className="bg-teal-600 hover:bg-teal-700">
+              保存編輯
+            </Button>
           </div>
         </form>
       </div>

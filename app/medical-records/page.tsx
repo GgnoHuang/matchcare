@@ -108,8 +108,15 @@ export default function MedicalRecordsPage() {
         }
       })
       
-      setMedicalRecords(formattedRecords)
-      console.log('最終格式化的病歷資料:', formattedRecords)
+      // 按照新到舊排序（最新的在前面）
+      const sortedRecords = formattedRecords.sort((a: any, b: any) => {
+        const dateA = new Date(a.originalData?.upload_date || a.originalData?.visitDate || 0)
+        const dateB = new Date(b.originalData?.upload_date || b.originalData?.visitDate || 0)
+        return dateB.getTime() - dateA.getTime()
+      })
+      
+      setMedicalRecords(sortedRecords)
+      console.log('最終格式化的病歷資料:', sortedRecords)
     } catch (error) {
       console.error('載入病歷資料失敗:', error)
       setMedicalRecords([])
@@ -464,13 +471,6 @@ export default function MedicalRecordsPage() {
                       </>
                     )}
                   </div>
-                  {record.hasInsuranceCoverage && (
-                    <Link href={`/claims/new?record=${record.id}`} className="w-full md:w-auto">
-                      <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full md:w-auto">
-                        申請理賠
-                      </Button>
-                    </Link>
-                  )}
                   {!record.hasInsuranceCoverage && (
                     <Button size="sm" variant="outline" disabled className="w-full md:w-auto">
                       不符合理賠條件
