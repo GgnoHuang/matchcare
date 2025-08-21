@@ -843,12 +843,58 @@ ${imageBase64 ? `## 🖼️ 圖片內容分析
   }
 
   /**
-   * 第一階段：保單結構化萃取（不減少現有提示內容，只在結構與輸出上加強）
+   * 第一階段：簡單測試 prompt
+   * 用途：流程穿插測試，不涉及資料處理
+   */
+  async testPromptStage(): Promise<string> {
+    try {
+      console.log('第一階段-測試 prompt 開始');
+
+      if (!this.apiKey) {
+        throw new Error('請先設定 OpenAI API Key');
+      }
+
+      // 簡單的測試 prompt
+      const prompt = '1+1=?';
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.1,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenAI API 錯誤: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const result = data.choices?.[0]?.message?.content || '';
+      
+      console.log('第一階段-測試 prompt 結果:', result);
+      return result;
+    } catch (error) {
+      console.error('第一階段測試錯誤:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 第二階段：保單結構化萃取（不減少現有提示內容，只在結構與輸出上加強）
    * 目標：輸出與現有儲存結構相容的 policyInfo（含 policyBasicInfo 與 coverageDetails.coverage）
    */
   async summarizeInsurancePolicy(text: string, imageBase64: string | null = null): Promise<any> {
     try {
-      console.log('第一階段-保單摘要：文字長度:', text?.length || 0, '圖片:', imageBase64 ? '有' : '無');
+      console.log('第二階段-保單摘要：文字長度:', text?.length || 0, '圖片:', imageBase64 ? '有' : '無');
 
       if (!this.apiKey) {
         throw new Error('請先設定 OpenAI API Key');
@@ -1021,7 +1067,7 @@ ${imageBase64 ? `## 🖼️ 圖片內容分析
           }
           return parsed;
         } catch (e) {
-          console.warn('第一階段 JSON 解析失敗，返回空結構', e);
+          console.warn('第二階段 JSON 解析失敗，返回空結構', e);
         }
       }
 
@@ -1033,8 +1079,8 @@ ${imageBase64 ? `## 🖼️ 圖片內容分析
   }
 
   /**
-   * 第二階段：基於摘要推理（填補/推估所需欄位，例如最高理賠金額…）
-   * 輸入為第一階段的 policyInfo（以及可選 flatFields），輸出 analysisResult 給前端顯示與後續流程。
+   * 第三階段：基於摘要推理（填補/推估所需欄位，例如最高理賠金額…）
+   * 輸入為第二階段的 policyInfo（以及可選 flatFields），輸出 analysisResult 給前端顯示與後續流程。
    */
   async analyzePolicyFromSummary(summary: { policyInfo: any, flatFields?: any }): Promise<any> {
     const prompt = `你是保險理賠與條款專家。以下是保單的結構化摘要，請在不臆測不存在條款的前提下，完成推理：

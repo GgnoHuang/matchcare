@@ -81,15 +81,20 @@ export default function InsuranceImportPage() {
       console.log('開始分析保單文件:', fileData.filename)
       
       const openaiService = new OpenAIService()
-      console.log('開始 AI 分析（兩階段）...')
-      // 第一階段：結構化萃取摘要（policyInfo + flatFields）
+      console.log('開始 AI 分析（三階段）...')
+      
+      // 第一階段：簡單測試 prompt
+      const testResult = await openaiService.testPromptStage()
+      console.log('第一階段測試完成:', testResult)
+      
+      // 第二階段：結構化萃取摘要（policyInfo + flatFields）
       const summary = await openaiService.summarizeInsurancePolicy(
         fileData.text || '',
         fileData.base64
       )
       console.log('AI 摘要結果:', summary)
 
-      // 第二階段：基於摘要推理（最高理賠等）
+      // 第三階段：基於摘要推理（最高理賠等）
       const analysis = await openaiService.analyzePolicyFromSummary({
         policyInfo: summary?.policyInfo || {},
         flatFields: summary?.flatFields || {}
