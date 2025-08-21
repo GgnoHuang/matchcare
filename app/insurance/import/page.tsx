@@ -31,6 +31,7 @@ export default function InsuranceImportPage() {
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string, email: string } | null>(null)
   const [pdfText, setPdfText] = useState<string>('')
+  const [isTestingStage1, setIsTestingStage1] = useState(false)
   
   // Manual input form state
   const [formData, setFormData] = useState({
@@ -69,6 +70,27 @@ export default function InsuranceImportPage() {
     fetchUser()
   }, [])
 
+  // 測試第一階段 prompt 的獨立函數
+  const testStage1Only = async () => {
+    if (!pdfText) {
+      console.log('沒有可用的PDF文字資料')
+      return
+    }
+
+    setIsTestingStage1(true)
+    try {
+      const openaiService = new OpenAIService()
+      console.log('🧪 獨立測試第一階段 prompt...')
+      console.log('🧪 使用的PDF文字長度:', pdfText.length)
+      const testResult = await openaiService.testPromptStage(pdfText)
+      console.log('🧪 獨立測試結果:', testResult)
+    } catch (error) {
+      console.error('🧪 獨立測試失敗:', error)
+    } finally {
+      setIsTestingStage1(false)
+    }
+  }
+
 
   const handleFileUpload = async (fileData: UploadedFile | null) => {
     if (!fileData) return
@@ -84,7 +106,9 @@ export default function InsuranceImportPage() {
       console.log('開始 AI 分析（三階段）...')
       
       // 第一階段：簡單測試 prompt
-      const testResult = await openaiService.testPromptStage()
+      const testResult = await openaiService.testPromptStage(
+         fileData.text || ''
+      )
       console.log('第一階段測試完成:', testResult)
       
       // 第二階段：結構化萃取摘要（policyInfo + flatFields）
@@ -101,7 +125,11 @@ export default function InsuranceImportPage() {
       })
       console.log('AI 推理結果:', analysis)
 
-      const result = { ...summary, analysisResult: analysis }
+      const result = { 
+        ...summary, 
+        analysisResult: analysis,
+        claimConditions: testResult // 保存第一階段的理賠條件列點
+      }
       console.log('AI 分析整合結果:', result)
       
       setAnalysisResult(result)
@@ -310,7 +338,7 @@ export default function InsuranceImportPage() {
           document_type: 'insurance',
           upload_date: new Date().toISOString(),
           file_size: 0,
-          text_content: pdfText || '',
+          text_content: analysisResult.claimConditions || '', // 第一階段的理賠條件列點
           image_base64: '',
           notes: 'AI自動分析上傳',
           
@@ -477,6 +505,28 @@ export default function InsuranceImportPage() {
                           辨識結果「不一定」是百分百正確。
                         </p>
                       </div>
+                    </div>
+                    
+                    {/* 測試按鈕 */}
+                    <div className="mt-4 pt-4 border-t border-green-200">
+                      <Button
+                        onClick={testStage1Only}
+                        disabled={isTestingStage1 || !pdfText}
+                        variant="outline"
+                        className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                      >
+                        {isTestingStage1 ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                            測試中...
+                          </>
+                        ) : (
+                          '🧪 測試第一階段 Prompt'
+                        )}
+                      </Button>
+                      <p className="text-xs text-blue-600 mt-1">
+                        點擊測試第一階段 AI prompt，結果會在 Console 顯示
+                      </p>
                     </div>
                   </div>
                 )}
