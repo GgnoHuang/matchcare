@@ -44,6 +44,7 @@ interface ExtractedData {
   notes: string
   isFirstOccurrence: string
   medicalExam: string
+  imageBase64?: string // 新增圖檔欄位
 }
 
 export default function MedicalRecordsImportPage() {
@@ -110,7 +111,11 @@ export default function MedicalRecordsImportPage() {
       setIsCompleted(true)
 
       // 直接使用標準 JSON 格式，不做轉換
-      setExtractedData(result)
+      // 同時儲存圖檔 base64 供後續查看詳情使用
+      setExtractedData({
+        ...result,
+        imageBase64: fileData.base64 // 新增圖檔資料
+      })
     } catch (error) {
       console.error('Error analyzing medical record:', error)
       setError('AI 分析失敗，請稍後再試或使用手動輸入')
@@ -140,6 +145,59 @@ export default function MedicalRecordsImportPage() {
     }
   }
   
+  // 上傳圖檔到 Supabase Storage
+  const uploadImageToStorage = async (base64Data: string, fileName: string): Promise<string> => {
+    if (!user?.phoneNumber) throw new Error('用戶未登入')
+    
+    try {
+      // 從 data URL 中提取純 base64 數據
+      const base64Content = base64Data.split(',')[1]
+      
+      // 將 base64 轉換為 blob
+      const byteCharacters = atob(base64Content)
+      const byteNumbers = new Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i)
+      }
+      const byteArray = new Uint8Array(byteNumbers)
+      const blob = new Blob([byteArray], { type: 'image/jpeg' })
+      
+      // 生成唯一檔案名稱
+      const timestamp = Date.now()
+      const fileExtension = fileName.split('.').pop() || 'jpg'
+      const storageFileName = `medical-records/${user.phoneNumber}/${timestamp}.${fileExtension}`
+      
+      // 上傳到 Supabase Storage
+      const formData = new FormData()
+      formData.append('file', blob, storageFileName)
+      
+      const uploadResponse = await fetch(
+        `${supabaseConfig.baseUrl.replace('/rest/v1', '')}/storage/v1/object/medical-files/${storageFileName}`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseConfig.apiKey}`,
+          },
+          body: formData
+        }
+      )
+      
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text()
+        console.error('Storage upload error:', errorText)
+        throw new Error(`圖檔上傳失敗: ${uploadResponse.status}`)
+      }
+      
+      // 返回檔案的公開 URL
+      const publicUrl = `${supabaseConfig.baseUrl.replace('/rest/v1', '')}/storage/v1/object/public/medical-files/${storageFileName}`
+      return publicUrl
+      
+    } catch (error) {
+      console.error('圖檔上傳失敗:', error)
+      throw new Error('圖檔上傳失敗，將以純文字記錄儲存')
+    }
+  }
+
   // 儲存病歷記錄到 Supabase
   const saveMedicalRecordToSupabase = async (medicalData: ExtractedData) => {
     if (!user?.phoneNumber) throw new Error('用戶未登入')
@@ -170,6 +228,9 @@ export default function MedicalRecordsImportPage() {
     
     const userId = userData[0].id
     
+    // 準備圖檔資料 (如果有的話)
+    console.log('準備儲存病歷，是否有圖檔:', !!medicalData.imageBase64)
+    
     // 插入病歷記錄
     const response = await fetch(`${baseUrl}/medical_records`, {
       method: 'POST',
@@ -187,7 +248,7 @@ export default function MedicalRecordsImportPage() {
         upload_date: new Date().toISOString(),
         file_size: 0,
         text_content: '',
-        image_base64: null,
+        image_base64: medicalData.imageBase64 ? medicalData.imageBase64.split(',')[1] : null, // 儲存純 base64，移除 data URL 前綴
         notes: 'AI自動分析上傳',
         medical_data: medicalData
       })

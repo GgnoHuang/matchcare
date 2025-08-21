@@ -386,20 +386,7 @@ export default function MedicalRecordsPage() {
         </AlertDescription>
       </Alert>
 
-      <div className="overflow-x-auto pb-2">
-        <Tabs defaultValue="all" className="w-full">
-          <TabsList className="mb-4 h-auto flex flex-nowrap overflow-x-auto pb-px">
-            <TabsTrigger value="all" className="px-4 py-2">
-              全部病歷
-            </TabsTrigger>
-            <TabsTrigger value="eligible" className="px-4 py-2">
-              可理賠病歷
-            </TabsTrigger>
-            <TabsTrigger value="ineligible" className="px-4 py-2">
-              不可理賠病歷
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="all" className="space-y-4">
+      <div className="space-y-4">
             {displayRecords.length > 0 ? (
               displayRecords.map((record) => (
               <Card key={record.id} className="overflow-hidden">
@@ -408,7 +395,6 @@ export default function MedicalRecordsPage() {
                     <div>
                       <CardTitle className="flex flex-wrap items-center gap-2 text-lg md:text-xl">
                         {record.hospital} - {record.department}
-                        {record.hasInsuranceCoverage && <Badge className="bg-teal-600 hover:bg-teal-700">可理賠</Badge>}
                       </CardTitle>
                       <CardDescription>{record.date}</CardDescription>
                     </div>
@@ -542,156 +528,6 @@ export default function MedicalRecordsPage() {
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
-          <TabsContent value="eligible" className="space-y-4">
-            {displayRecords
-              .filter((r) => r.hasInsuranceCoverage)
-              .map((record) => (
-                <Card key={record.id} className="overflow-hidden">
-                  <CardHeader className="pb-2">
-                    <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-0">
-                      <div>
-                        <CardTitle className="flex flex-wrap items-center gap-2 text-lg md:text-xl">
-                          {record.hospital} - {record.department}
-                          <Badge className="bg-teal-600 hover:bg-teal-700">可理賠</Badge>
-                        </CardTitle>
-                        <CardDescription>{record.date}</CardDescription>
-                      </div>
-                      <div className="flex gap-2 w-full md:w-auto">
-                        <Link href={`/medical-records/${record.id}`} className="flex-1 md:flex-initial">
-                          <Button variant="ghost" size="sm" className="w-full md:w-auto">
-                            <FileSearch className="h-4 w-4 mr-2" />
-                            查看詳情
-                          </Button>
-                        </Link>
-                        <Link href={`/medical-records/edit/${record.id}`} className="flex-1 md:flex-initial">
-                          <Button variant="outline" size="sm" className="w-full md:w-auto">
-                            <Edit className="h-4 w-4 mr-2" />
-                            編輯
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="flex items-start gap-2">
-                        <Stethoscope className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium">診斷結果</p>
-                          <p className="text-sm text-gray-500">{record.diagnosis}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <Calendar className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium">治療方案</p>
-                          <p className="text-sm text-gray-500">{record.treatments.join(", ")}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <Pill className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium">用藥記錄</p>
-                          <p className="text-sm text-gray-500">{record.medications.join(", ")}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="bg-gray-50 border-t flex flex-col md:flex-row md:justify-between md:items-center gap-4 md:gap-0">
-                    <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 w-full">
-                      <p className="text-sm text-gray-500">主治醫師: {record.doctor}</p>
-                      <div className="md:hidden w-full h-px bg-gray-200"></div>
-                      <MatchedPoliciesDropdown
-                        count={record.matchedPolicies}
-                        policies={record.matchedPoliciesDetails}
-                      />
-                      <Badge
-                        variant="outline"
-                        className={`bg-white ${
-                          record.claimSuccessRate >= 90
-                            ? "text-green-600 border-green-200"
-                            : record.claimSuccessRate >= 70
-                              ? "text-amber-600 border-amber-200"
-                              : "text-red-600 border-red-200"
-                        }`}
-                      >
-                        理賠成功率: {record.claimSuccessRate}%
-                      </Badge>
-                    </div>
-                    <Link href={`/claims/new?record=${record.id}`} className="w-full md:w-auto">
-                      <Button size="sm" className="bg-teal-600 hover:bg-teal-700 w-full md:w-auto">
-                        申請理賠
-                      </Button>
-                    </Link>
-                  </CardFooter>
-                </Card>
-              ))}
-          </TabsContent>
-          <TabsContent value="ineligible" className="space-y-4">
-            {displayRecords
-              .filter((r) => !r.hasInsuranceCoverage)
-              .map((record) => (
-                <Card key={record.id} className="overflow-hidden">
-                  <CardHeader className="pb-2">
-                    <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-0">
-                      <div>
-                        <CardTitle className="flex flex-wrap items-center gap-2 text-lg md:text-xl">
-                          {record.hospital} - {record.department}
-                        </CardTitle>
-                        <CardDescription>{record.date}</CardDescription>
-                      </div>
-                      <div className="flex gap-2 w-full md:w-auto">
-                        <Link href={`/medical-records/${record.id}`} className="flex-1 md:flex-initial">
-                          <Button variant="ghost" size="sm" className="w-full md:w-auto">
-                            <FileSearch className="h-4 w-4 mr-2" />
-                            查看詳情
-                          </Button>
-                        </Link>
-                        <Link href={`/medical-records/edit/${record.id}`} className="flex-1 md:flex-initial">
-                          <Button variant="outline" size="sm" className="w-full md:w-auto">
-                            <Edit className="h-4 w-4 mr-2" />
-                            編輯
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="flex items-start gap-2">
-                        <Stethoscope className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium">診斷結果</p>
-                          <p className="text-sm text-gray-500">{record.diagnosis}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <Calendar className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium">治療方案</p>
-                          <p className="text-sm text-gray-500">{record.treatments.join(", ")}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <Pill className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium">用藥記錄</p>
-                          <p className="text-sm text-gray-500">{record.medications.join(", ")}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="bg-gray-50 border-t flex flex-col md:flex-row md:justify-between md:items-center gap-4 md:gap-0">
-                    <p className="text-sm text-gray-500">主治醫師: {record.doctor}</p>
-                    <Button size="sm" variant="outline" disabled className="w-full md:w-auto">
-                      不符合理賠條件
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-          </TabsContent>
-        </Tabs>
       </div>
     </div>
   )
