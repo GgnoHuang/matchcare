@@ -20,8 +20,13 @@ import { zhTW } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { OpenAIService } from '@/lib/openaiService'
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
-import { userDataService, generateId } from "@/lib/storage"
 import { checkAuth } from "@/app/actions/auth-service"
+import { supabaseConfig } from "@/lib/supabase"
+
+// 生成唯一ID的輔助函數
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+}
 
 
 interface ExtractedData {
@@ -51,7 +56,7 @@ export default function MedicalRecordsImportPage() {
   const [isSaved, setIsSaved] = useState(false)
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
+  const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string, email: string } | null>(null)
 
   // Manual form states
   const [formData, setFormData] = useState({
@@ -119,77 +124,115 @@ export default function MedicalRecordsImportPage() {
   }
 
   const handleNext = async () => {
-    if (!extractedData || !user?.id) {
+    if (!extractedData || !user?.phoneNumber) {
       setError('請先登入或重新分析')
       return
     }
     
     try {
-      // 使用標準 JSON 格式直接儲存 AI 分析結果
-      const recordData = {
-        id: generateId(),
-        fileName: 'ai_analyzed',
-        fileType: 'pdf' as const,
-        documentType: 'medical' as const,
-        uploadDate: new Date().toISOString(),
-        fileSize: 0,
-        textContent: '',
-        imageBase64: undefined,
-        medicalInfo: extractedData // 直接使用 AI 掃描的標準 JSON 格式
-      }
-      
-      // Save using userDataService
-      await userDataService.saveMedicalRecord(user.id, recordData)
-      
+      // 儲存到 Supabase
+      await saveMedicalRecordToSupabase(extractedData)
       setIsSaved(true)
     } catch (error) {
       console.error('Error saving medical record:', error)
-      setError('保存失敗，請稍後再試')
+      const errorMessage = error instanceof Error ? error.message : '保存失敗，請稍後再試'
+      setError(errorMessage)
     }
+  }
+  
+  // 儲存病歷記錄到 Supabase
+  const saveMedicalRecordToSupabase = async (medicalData: ExtractedData) => {
+    if (!user?.phoneNumber) throw new Error('用戶未登入')
+    
+    const { baseUrl, apiKey } = supabaseConfig
+    
+    // 首先查詢用戶ID
+    const userResponse = await fetch(
+      `${baseUrl}/users_basic?select=id&phonenumber=eq.${encodeURIComponent(user.phoneNumber)}`,
+      {
+        method: "GET",
+        headers: {
+          "apikey": apiKey,
+          "Authorization": `Bearer ${apiKey}`,
+          "Accept": "application/json",
+        }
+      }
+    )
+    
+    if (!userResponse.ok) {
+      throw new Error('查詢用戶失敗')
+    }
+    
+    const userData = await userResponse.json()
+    if (userData.length === 0) {
+      throw new Error('找不到用戶記錄')
+    }
+    
+    const userId = userData[0].id
+    
+    // 插入病歷記錄
+    const response = await fetch(`${baseUrl}/medical_records`, {
+      method: 'POST',
+      headers: {
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        file_name: 'ai_analyzed_medical_record.pdf',
+        file_type: 'image',
+        document_type: 'medical',
+        upload_date: new Date().toISOString(),
+        file_size: 0,
+        text_content: '',
+        image_base64: null,
+        notes: 'AI自動分析上傳',
+        medical_data: medicalData
+      })
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`保存病歷失敗 (${response.status}): ${errorText}`)
+    }
+    
+    return await response.json()
   }
 
   const handleManualSubmit = async () => {
-    if (!user?.id) {
+    if (!user?.phoneNumber) {
       setError('請先登入')
       return
     }
 
     try {
-      // 使用標準 JSON 格式儲存手動輸入資料
-      const recordData = {
-        id: generateId(),
-        fileName: 'manual_input',
-        fileType: 'pdf' as const,
-        documentType: 'medical' as const,
-        uploadDate: new Date().toISOString(),
-        fileSize: 0,
-        textContent: '',
-        imageBase64: undefined,
-        medicalInfo: {
-          patientName: "", // 手動輸入頁面沒有患者資訊，保持空值
-          patientAge: "",
-          patientGender: "male",
-          hospitalName: formData.hospital,
-          department: formData.department,
-          doctorName: formData.doctor,
-          visitDate: formData.visitDate ? format(formData.visitDate, "yyyy-MM-dd") : "",
-          isFirstOccurrence: formData.isFirstOccurrence,
-          medicalExam: formData.medicalExam,
-          diagnosis: formData.diagnosis,
-          symptoms: "",
-          treatment: formData.treatment,
-          medications: formData.medication,
-          notes: ""
-        }
+      // 將手動輸入資料轉換為 ExtractedData 格式
+      const manualData: ExtractedData = {
+        patientName: "", // 手動輸入頁面沒有患者資訊，保持空值
+        patientAge: "",
+        patientGender: "male",
+        hospitalName: formData.hospital,
+        department: formData.department,
+        doctorName: formData.doctor,
+        visitDate: formData.visitDate ? format(formData.visitDate, "yyyy-MM-dd") : "",
+        isFirstOccurrence: formData.isFirstOccurrence,
+        medicalExam: formData.medicalExam,
+        diagnosis: formData.diagnosis,
+        symptoms: "",
+        treatment: formData.treatment,
+        medications: formData.medication,
+        notes: ""
       }
       
-      // Save using userDataService
-      await userDataService.saveMedicalRecord(user.id, recordData)
-      
+      // 儲存到 Supabase
+      await saveMedicalRecordToSupabase(manualData)
       setIsSaved(true)
     } catch (error) {
       console.error('Error saving medical record:', error)
-      setError('保存失敗，請稍後再試')
+      const errorMessage = error instanceof Error ? error.message : '保存失敗，請稍後再試'
+      setError(errorMessage)
     }
   }
 

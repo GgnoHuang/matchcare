@@ -28,16 +28,62 @@ import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
 import { checkAuth } from "@/app/actions/auth-service"
 import { OpenAIService } from "@/lib/openaiService"
 import MedicalDataEditor from "@/components/ui/medical-data-editor"
-import { 
-  userDataService, 
-  generateId, 
-  formatFileSize, 
-  formatDate,
-  MedicalRecord, 
-  InsurancePolicy,
-  DocumentType,
-  StorageStats 
-} from "@/lib/storage"
+import { supabaseConfig } from "@/lib/supabase"
+
+// 生成唯一ID的輔助函數
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+}
+
+// 格式化檔案大小
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// 格式化日期
+function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString('zh-TW');
+}
+
+// 定義類型
+interface MedicalRecord {
+  id: string
+  fileName: string
+  fileType: string
+  documentType: string
+  uploadDate: string
+  fileSize: number
+  textContent?: string
+  imageBase64?: string
+  notes?: string
+  medicalInfo?: any
+}
+
+interface InsurancePolicy {
+  id: string
+  fileName: string
+  fileType: string
+  documentType: string
+  uploadDate: string
+  fileSize: number
+  textContent?: string
+  imageBase64?: string
+  notes?: string
+  policyInfo?: any
+}
+
+type DocumentType = 'medical' | 'insurance'
+
+interface StorageStats {
+  totalSize: number
+  fileCount: number
+  medicalRecords: number
+  insurancePolicies: number
+}
 
 export default function MyDataPage() {
   // URL參數
@@ -46,7 +92,7 @@ export default function MyDataPage() {
   const editType = searchParams.get('type')
   
   // 用戶狀態
-  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
+  const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string, email: string } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   
   // 資料狀態
@@ -138,41 +184,151 @@ export default function MyDataPage() {
 
   // 載入用戶資料
   useEffect(() => {
-    if (user?.id) {
+    if (user?.phoneNumber) {
       loadUserData()
     }
   }, [user])
 
   const loadUserData = async () => {
-    if (!user?.id) return
+    if (!user?.phoneNumber) return
 
     try {
-      const [records, policies, statistics] = await Promise.all([
-        userDataService.getMedicalRecords(user.id),
-        userDataService.getInsurancePolicies(user.id),
-        userDataService.getStorageStats(user.id)
-      ])
-
-      setMedicalRecords(records)
-      setInsurancePolicies(policies)
-      setStats(statistics)
-      
-      // 檢查URL參數，自動開啟編輯模式
-      if (editId && editType === 'policy') {
-        const targetPolicy = policies.find(p => p.id === editId)
-        if (targetPolicy) {
-          setEditingPolicy(targetPolicy)
-          setActiveTab('policies') // 切換到保單分頁
-        }
+      // 獲取病歷資料
+      const medicalRecordsData = await getUserMedicalRecords(user.phoneNumber)
+      if (medicalRecordsData.success) {
+        const formattedRecords: MedicalRecord[] = medicalRecordsData.records.map((record: any) => ({
+          id: record.id,
+          fileName: record.file_name,
+          fileType: record.file_type, 
+          documentType: record.document_type,
+          uploadDate: record.upload_date,
+          fileSize: record.file_size,
+          textContent: record.text_content,
+          imageBase64: record.image_base64,
+          notes: record.notes,
+          medicalInfo: record.medical_data
+        }))
+        setMedicalRecords(formattedRecords)
+      } else {
+        setMedicalRecords([])
       }
+      
+      // 簡化的統計資訊
+      const stats: StorageStats = {
+        totalSize: 0,
+        fileCount: medicalRecordsData.records?.length || 0,
+        medicalRecords: medicalRecordsData.records?.length || 0,
+        insurancePolicies: 0
+      }
+      setStats(stats)
+      
+      // 暫時留空保單資料，待後續完善
+      setInsurancePolicies([])
     } catch (error) {
       console.error('載入用戶資料失敗:', error)
     }
   }
+  
+  // 獲取用戶病歷資料
+  const getUserMedicalRecords = async (phoneNumber: string) => {
+    const { baseUrl, apiKey } = supabaseConfig
+    
+    try {
+      const response = await fetch(
+        `${baseUrl}/users_basic?select=*,medical_records(*)&phonenumber=eq.${encodeURIComponent(phoneNumber)}`,
+        {
+          method: "GET",
+          headers: {
+            "apikey": apiKey,
+            "Authorization": `Bearer ${apiKey}`,
+            "Accept": "application/json",
+          }
+        }
+      )
+      
+      if (!response.ok) {
+        throw new Error(`API 請求失敗: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      if (data.length === 0) {
+        return { success: true, records: [] }
+      }
+      
+      const records = data[0].medical_records || []
+      return { success: true, records }
+    } catch (error: any) {
+      console.error('取得病歷失敗:', error)
+      return { success: false, error: error.message, records: [] }
+    }
+  }
+  
+  // 儲存病歷記錄到 Supabase
+  const saveMedicalRecordToSupabase = async (record: MedicalRecord) => {
+    if (!user?.phoneNumber) throw new Error('用戶未登入')
+    
+    const { baseUrl, apiKey } = supabaseConfig
+    
+    // 首先查詢用戶ID
+    const userResponse = await fetch(
+      `${baseUrl}/users_basic?select=id&phonenumber=eq.${encodeURIComponent(user.phoneNumber)}`,
+      {
+        method: "GET",
+        headers: {
+          "apikey": apiKey,
+          "Authorization": `Bearer ${apiKey}`,
+          "Accept": "application/json",
+        }
+      }
+    )
+    
+    if (!userResponse.ok) {
+      throw new Error('查詢用戶失敗')
+    }
+    
+    const userData = await userResponse.json()
+    if (userData.length === 0) {
+      throw new Error('找不到用戶記錄')
+    }
+    
+    const userId = userData[0].id
+    
+    // 插入病歷記錄
+    const response = await fetch(`${baseUrl}/medical_records`, {
+      method: 'POST',
+      headers: {
+        'apikey': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        file_name: record.fileName,
+        file_type: record.fileType,
+        document_type: record.documentType,
+        upload_date: record.uploadDate,
+        file_size: record.fileSize,
+        text_content: record.textContent || '',
+        image_base64: record.imageBase64 || '',
+        notes: record.notes || 'AI自動分析上傳',
+        medical_data: record.medicalInfo || {},
+        created_at: new Date().toISOString()
+      })
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`保存病歷失敗 (${response.status}): ${errorText}`)
+    }
+    
+    return await response.json()
+  }
 
   // 處理病歷檔案上傳
   const handleMedicalFileUpload = async (fileData: UploadedFile | null) => {
-    if (!fileData || !user?.id) return
+    if (!fileData || !user?.phoneNumber) return
 
     try {
       setIsAnalyzing(true)
@@ -229,7 +385,8 @@ export default function MyDataPage() {
         }
       }
 
-      await userDataService.saveMedicalRecord(user.id, record)
+      // 儲存到 Supabase
+      await saveMedicalRecordToSupabase(record)
       await loadUserData()
       
       if (analysisSucceeded) {
@@ -296,7 +453,8 @@ export default function MyDataPage() {
         policyInfo: analyzedData
       }
 
-      await userDataService.saveInsurancePolicy(user.id, policy)
+      // TODO: 實作保單上傳到 Supabase
+      console.warn('保單上傳功能待實作')
       await loadUserData()
       
       if (analysisSucceeded) {
@@ -332,10 +490,11 @@ export default function MyDataPage() {
 
   // 刪除病歷記錄
   const handleDeleteMedicalRecord = async (recordId: string) => {
-    if (!user?.id || !confirm('確定要刪除這筆病歷記錄嗎？')) return
+    if (!user?.phoneNumber || !confirm('確定要刪除這筆病歷記錄嗎？')) return
 
     try {
-      await userDataService.deleteMedicalRecord(user.id, recordId)
+      // TODO: 實作刪除病歷功能
+      console.warn('刪除病歷功能待實作')
       await loadUserData()
     } catch (error) {
       console.error('刪除病歷記錄失敗:', error)
@@ -344,10 +503,11 @@ export default function MyDataPage() {
 
   // 刪除保單記錄
   const handleDeleteInsurancePolicy = async (policyId: string) => {
-    if (!user?.id || !confirm('確定要刪除這筆保單記錄嗎？')) return
+    if (!user?.phoneNumber || !confirm('確定要刪除這筆保單記錄嗎？')) return
 
     try {
-      await userDataService.deleteInsurancePolicy(user.id, policyId)
+      // TODO: 實作刪除保單功能
+      console.warn('刪除保單功能待實作')
       await loadUserData()
     } catch (error) {
       console.error('刪除保單記錄失敗:', error)
@@ -362,7 +522,7 @@ export default function MyDataPage() {
 
   // 清除用戶所有資料
   const handleClearAllData = async () => {
-    if (!user?.id) return
+    if (!user?.phoneNumber) return
     
     const confirmed = confirm(
       '⚠️ 危險操作：這將永久刪除您的所有資料，包括：\n\n' +
@@ -380,7 +540,8 @@ export default function MyDataPage() {
     
     try {
       setIsClearingData(true)
-      await userDataService.clearUserData(user.id)
+      // TODO: 實作清空資料功能
+      console.warn('清空資料功能待實作')
       await loadUserData() // 重新載入空的資料
       setUploadSuccess('✅ 所有資料已成功清除')
       setTimeout(() => setUploadSuccess(null), 3000)
@@ -395,13 +556,14 @@ export default function MyDataPage() {
 
   // 儲存編輯的病歷資料
   const handleSaveMedicalRecord = async (recordId: string, updatedData: any) => {
-    if (!user?.id) return
+    if (!user?.phoneNumber) return
     
     try {
       const record = medicalRecords.find(r => r.id === recordId)
       if (record) {
         const updatedRecord = { ...record, medicalInfo: updatedData }
-        await userDataService.saveMedicalRecord(user.id, updatedRecord)
+        // TODO: 實作編輯病歷功能
+        console.warn('編輯病歷功能待實作')
         await loadUserData()
         setEditingRecord(null)
       }
@@ -413,13 +575,14 @@ export default function MyDataPage() {
 
   // 儲存編輯的保單資料
   const handleSaveInsurancePolicy = async (policyId: string, updatedData: any) => {
-    if (!user?.id) return
+    if (!user?.phoneNumber) return
     
     try {
       const policy = insurancePolicies.find(p => p.id === policyId)
       if (policy) {
         const updatedPolicy = { ...policy, policyInfo: updatedData }
-        await userDataService.saveInsurancePolicy(user.id, updatedPolicy)
+        // TODO: 實作編輯保單功能
+        console.warn('編輯保單功能待實作')
         await loadUserData()
         setEditingPolicy(null)
       }
