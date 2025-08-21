@@ -30,6 +30,7 @@ export default function InsuranceImportPage() {
   const [analysisResult, setAnalysisResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string, email: string } | null>(null)
+  const [pdfText, setPdfText] = useState<string>('')
   
   // Manual input form state
   const [formData, setFormData] = useState({
@@ -74,6 +75,7 @@ export default function InsuranceImportPage() {
     
     setIsProcessing(true)
     setError(null)
+    setPdfText(fileData.text || '')
     
     try {
       console.log('開始分析保單文件:', fileData.filename)
@@ -303,7 +305,7 @@ export default function InsuranceImportPage() {
           document_type: 'insurance',
           upload_date: new Date().toISOString(),
           file_size: 0,
-          text_content: '',
+          text_content: pdfText || '',
           image_base64: '',
           notes: 'AI自動分析上傳',
           

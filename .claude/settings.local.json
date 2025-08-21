@@ -14,7 +14,8 @@
       "Bash(open:*)",
       "Bash(grep:*)",
       "Bash(mkdir:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": []
   }
