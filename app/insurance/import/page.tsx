@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Upload, FileText, CheckCircle2, Info, Calendar, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Upload, FileText, CheckCircle2, Info, Calendar, Plus, Trash2, Check, Loader2, AlertCircle } from 'lucide-react'
 import { OpenAIService } from '@/lib/openaiService'
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
 import { checkAuth } from "@/app/actions/auth-service"
@@ -32,6 +32,10 @@ export default function InsuranceImportPage() {
   const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string, email: string } | null>(null)
   const [pdfText, setPdfText] = useState<string>('')
   const [isTestingStage1, setIsTestingStage1] = useState(false)
+  const [isSaved, setIsSaved] = useState(false)
+  
+  // 批次上傳狀態
+  const [allAnalysisResults, setAllAnalysisResults] = useState<any[]>([])
   
   // Manual input form state
   const [formData, setFormData] = useState({
@@ -133,6 +137,8 @@ export default function InsuranceImportPage() {
       console.log('AI 分析整合結果:', result)
       
       setAnalysisResult(result)
+      // 添加到批次列表
+      setAllAnalysisResults(prev => [...prev, result])
       setIsComplete(true)
     } catch (error) {
       console.error('Error analyzing policy:', error)
@@ -275,11 +281,28 @@ export default function InsuranceImportPage() {
   }
   
   const handleAutoNext = async () => {
-    if (!analysisResult || !user?.phoneNumber) {
-      console.error('handleAutoNext 失敗:', { analysisResult, user })
+    if (allAnalysisResults.length === 0 || !user?.phoneNumber) {
+      console.error('handleAutoNext 失敗:', { allAnalysisResults, user })
       setError('請先登入或重新分析')
       return
     }
+    
+    try {
+      // 批次儲存所有保單記錄到 Supabase
+      for (let i = 0; i < allAnalysisResults.length; i++) {
+        await saveInsurancePolicyToSupabase(allAnalysisResults[i])
+      }
+      setIsSaved(true)
+    } catch (error) {
+      console.error('Error saving insurance policies:', error)
+      const errorMessage = error instanceof Error ? error.message : '保存失敗，請稍後再試'
+      setError(errorMessage)
+    }
+  }
+  
+  // 保存單個保單到 Supabase 的函數
+  const saveInsurancePolicyToSupabase = async (analysisResult: any) => {
+    if (!user?.phoneNumber) throw new Error('用戶未登入')
     
     try {
       // 首先取得用戶ID
@@ -369,13 +392,74 @@ export default function InsuranceImportPage() {
       const result = await response.json()
       console.log('AI分析保單保存成功:', result)
       
-      // 成功保存後重定向到保單頁面
-      router.push('/insurance')
+      return result
     } catch (error) {
       console.error('Error saving analysis result:', error)
-      const errorMessage = error instanceof Error ? error.message : '保存失敗，請稍後再試'
-      setError(errorMessage)
+      throw error
     }
+  }
+
+  // 成功保存頁面
+  if (isSaved) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center gap-2 mb-6">
+            <Button variant="ghost" size="sm" onClick={() => router.back()} className="flex items-center gap-1">
+              <ArrowLeft className="h-4 w-4" />
+              返回保單總覽
+            </Button>
+          </div>
+
+          <Card>
+            <CardHeader className="text-center">
+              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <Check className="h-8 w-8 text-green-600" />
+              </div>
+              <CardTitle className="text-2xl text-green-600">儲存成功</CardTitle>
+              <CardDescription>已成功儲存 {allAnalysisResults.length} 筆保險保單至系統</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-medium mb-3">已儲存的保險保單</h3>
+                <div className="space-y-2 text-sm">
+                  {allAnalysisResults.map((result, index) => (
+                    <div key={index} className="mb-4 last:mb-0">
+                      <div className="font-medium text-gray-700 mb-2">第 {index + 1} 筆保單：</div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">保險公司：</span>
+                        <span>{result.flatFields?.company || result.policyInfo?.policyBasicInfo?.insuranceCompany || '未識別'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">保單名稱：</span>
+                        <span>{result.flatFields?.name || result.policyInfo?.policyBasicInfo?.policyName || '未識別'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">保單號碼：</span>
+                        <span>{result.flatFields?.number || result.policyInfo?.policyBasicInfo?.policyNumber || '未識別'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">保障期間：</span>
+                        <span>{result.flatFields?.startDate || result.policyInfo?.policyBasicInfo?.effectiveDate || '未識別'} 至 {result.flatFields?.endDate || result.policyInfo?.policyBasicInfo?.expiryDate || '未識別'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => router.back()} className="flex-1 bg-transparent">
+                  取消
+                </Button>
+                <Button onClick={() => router.push('/insurance')} className="flex-1 bg-teal-600 hover:bg-teal-700">
+                  返回保單總覽
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -456,47 +540,81 @@ export default function InsuranceImportPage() {
                   </div>
                 )}
 
-                {isComplete && analysisResult && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <h4 className="font-medium text-green-900 mb-2">辨識完成</h4>
-                        <p className="text-sm text-green-800 mb-3">
-                          系統已成功辨識您的保單資料：
-                        </p>
-                        <ul className="text-sm text-green-800 space-y-1 mb-4">
-                          <li>• 保險公司：{analysisResult.flatFields?.company || analysisResult.policyInfo?.policyBasicInfo?.insuranceCompany || '未識別'}</li>
-                          <li>• 保單名稱：{analysisResult.flatFields?.name || analysisResult.policyInfo?.policyBasicInfo?.policyName || '未識別'}</li>
-                          <li>• 保單號碼：{analysisResult.flatFields?.number || analysisResult.policyInfo?.policyBasicInfo?.policyNumber || '未識別'}</li>
-                          <li>• 保障期間：{analysisResult.flatFields?.startDate || analysisResult.policyInfo?.policyBasicInfo?.effectiveDate || '未識別'} 至 {analysisResult.flatFields?.endDate || analysisResult.policyInfo?.policyBasicInfo?.expiryDate || '未識別'}</li>
-                        </ul>
-                        <p className="text-sm text-green-700">
-                          辨識結果「不一定」是百分百正確。
-                        </p>
-                      </div>
+                {/* 顯示所有已分析的保單 */}
+                {allAnalysisResults.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-green-600">
+                      <CheckCircle2 className="h-5 w-5" />
+                      <span className="font-medium">已解讀 {allAnalysisResults.length} 筆保單</span>
                     </div>
-                    
-                    {/* 測試按鈕 */}
-                    <div className="mt-4 pt-4 border-t border-green-200">
-                      <Button
-                        onClick={testStage1Only}
-                        disabled={isTestingStage1 || !pdfText}
-                        variant="outline"
-                        className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-                      >
-                        {isTestingStage1 ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                            測試中...
-                          </>
-                        ) : (
-                          '🧪 測試第一階段 Prompt'
-                        )}
-                      </Button>
-                      <p className="text-xs text-blue-600 mt-1">
-                        點擊測試第一階段 AI prompt，結果會在 Console 顯示
+
+                    {/* 顯示每一筆分析結果 */}
+                    <div className="space-y-3">
+                      {allAnalysisResults.map((result, index) => (
+                        <div key={index} className="bg-green-50 border border-green-200 rounded-lg p-4">
+                          <div className="flex items-start gap-3">
+                            <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                              <h4 className="font-medium text-green-900 mb-2">第 {index + 1} 筆保單：</h4>
+                              <ul className="text-sm text-green-800 space-y-1 mb-4">
+                                <li>• 保險公司：{result.flatFields?.company || result.policyInfo?.policyBasicInfo?.insuranceCompany || '未識別'}</li>
+                                <li>• 保單名稱：{result.flatFields?.name || result.policyInfo?.policyBasicInfo?.policyName || '未識別'}</li>
+                                <li>• 保單號碼：{result.flatFields?.number || result.policyInfo?.policyBasicInfo?.policyNumber || '未識別'}</li>
+                                <li>• 保障期間：{result.flatFields?.startDate || result.policyInfo?.policyBasicInfo?.effectiveDate || '未識別'} 至 {result.flatFields?.endDate || result.policyInfo?.policyBasicInfo?.expiryDate || '未識別'}</li>
+                              </ul>
+                              {index === allAnalysisResults.length - 1 && (
+                                <p className="text-sm text-green-700">
+                                  辨識結果「不一定」是百分百正確。
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* 測試按鈕只在最新的保單顯示 */}
+                          {index === allAnalysisResults.length - 1 && (
+                            <div className="mt-4 pt-4 border-t border-green-200">
+                              <Button
+                                onClick={testStage1Only}
+                                disabled={isTestingStage1 || !pdfText}
+                                variant="outline"
+                                className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                              >
+                                {isTestingStage1 ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                                    測試中...
+                                  </>
+                                ) : (
+                                  '🧪 測試第一階段 Prompt'
+                                )}
+                              </Button>
+                              <p className="text-xs text-blue-600 mt-1">
+                                點擊測試第一階段 AI prompt，結果會在 Console 顯示
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 繼續上傳提示 */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-sm text-blue-800 mb-2">
+                        💡 您可以繼續上傳更多保單，完成後一次性儲存
                       </p>
+                      <Button
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          setIsComplete(false)
+                          setAnalysisResult(null)
+                          setIsProcessing(false)
+                          setError(null)
+                        }}
+                        className="text-blue-600 border-blue-300 hover:bg-blue-100"
+                      >
+                        繼續上傳
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -506,13 +624,14 @@ export default function InsuranceImportPage() {
                     setIsComplete(false)
                     setIsProcessing(false)
                     setAnalysisResult(null)
+                    setAllAnalysisResults([])
                     setError(null)
                   }}>
                     取消
                   </Button>
-                  {isComplete && (
+                  {allAnalysisResults.length > 0 && (
                     <Button onClick={handleAutoNext} className="bg-teal-600 hover:bg-teal-700">
-                      確定儲存
+                      儲存 ({allAnalysisResults.length}筆保單)
                     </Button>
                   )}
                 </div>

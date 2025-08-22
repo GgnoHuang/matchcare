@@ -333,7 +333,7 @@ export default function InsurancePage() {
     <div className="container py-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">保單健檢</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">保單總覽</h1>
           <p className="text-gray-500 mt-1 text-sm md:text-base">智能分析您的保險保單並匹配最佳理賠方案</p>
         </div>
         <div className="flex flex-wrap gap-2">
