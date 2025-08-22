@@ -58,6 +58,9 @@ export default function MedicalRecordsImportPage() {
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string, email: string } | null>(null)
+  
+  // 簡單的批次上傳狀態
+  const [allExtractedData, setAllExtractedData] = useState<ExtractedData[]>([])
 
   // Manual form states
   const [formData, setFormData] = useState({
@@ -112,10 +115,14 @@ export default function MedicalRecordsImportPage() {
 
       // 直接使用標準 JSON 格式，不做轉換
       // 同時儲存圖檔 base64 供後續查看詳情使用
-      setExtractedData({
+      const newData = {
         ...result,
         imageBase64: fileData.base64 // 新增圖檔資料
-      })
+      }
+      
+      setExtractedData(newData)
+      // 添加到批次列表
+      setAllExtractedData(prev => [...prev, newData])
     } catch (error) {
       console.error('Error analyzing medical record:', error)
       setError('AI 分析失敗，請稍後再試或使用手動輸入')
@@ -129,17 +136,19 @@ export default function MedicalRecordsImportPage() {
   }
 
   const handleNext = async () => {
-    if (!extractedData || !user?.phoneNumber) {
+    if (allExtractedData.length === 0 || !user?.phoneNumber) {
       setError('請先登入或重新分析')
       return
     }
     
     try {
-      // 儲存到 Supabase
-      await saveMedicalRecordToSupabase(extractedData)
+      // 批次儲存所有記錄到 Supabase
+      for (let i = 0; i < allExtractedData.length; i++) {
+        await saveMedicalRecordToSupabase(allExtractedData[i])
+      }
       setIsSaved(true)
     } catch (error) {
-      console.error('Error saving medical record:', error)
+      console.error('Error saving medical records:', error)
       const errorMessage = error instanceof Error ? error.message : '保存失敗，請稍後再試'
       setError(errorMessage)
     }
@@ -326,7 +335,7 @@ export default function MedicalRecordsImportPage() {
                 <Check className="h-8 w-8 text-green-600" />
               </div>
               <CardTitle className="text-2xl text-green-600">儲存成功</CardTitle>
-              <CardDescription>您的醫療記錄已成功儲存至系統</CardDescription>
+              <CardDescription>已成功儲存 {allExtractedData.length} 筆醫療記錄至系統</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="bg-gray-50 p-4 rounded-lg">
@@ -483,26 +492,52 @@ export default function MedicalRecordsImportPage() {
                   </div>
                 )}
 
-                {isCompleted && extractedData && (
+                {/* 顯示所有已分析的記錄 */}
+                {allExtractedData.length > 0 && (
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-green-600">
                       <CheckCircle className="h-5 w-5" />
-                      <span className="font-medium">解讀完成</span>
+                      <span className="font-medium">已解讀 {allExtractedData.length} 筆病歷</span>
                     </div>
 
-                    <Alert className="bg-green-50 border-green-200">
-                      <Check className="h-4 w-4 text-green-600" />
-                      <AlertDescription className="text-green-800">
-                        <strong>系統已自動辨識您的病歷內容：</strong>
-                        <ul className="list-disc list-inside mt-2 space-y-1">
-                          <li>醫院：{extractedData.hospitalName}</li>
-                          <li>科別：{extractedData.department}</li>
-                          <li>醫師：{extractedData.doctorName}</li>
-                          <li>日期：{extractedData.visitDate}</li>
-                        </ul>
-                        <p className="mt-2">辨識結果「不一定」是百分百正確。</p>
-                      </AlertDescription>
-                    </Alert>
+                    {/* 顯示每一筆分析結果 */}
+                    <div className="space-y-3">
+                      {allExtractedData.map((data, index) => (
+                        <Alert key={index} className="bg-green-50 border-green-200">
+                          <Check className="h-4 w-4 text-green-600" />
+                          <AlertDescription className="text-green-800">
+                            <strong>第 {index + 1} 筆病歷：</strong>
+                            <ul className="list-disc list-inside mt-2 space-y-1">
+                              <li>醫院：{data.hospitalName}</li>
+                              <li>科別：{data.department}</li>
+                              <li>醫師：{data.doctorName}</li>
+                              <li>日期：{data.visitDate}</li>
+                            </ul>
+                            {index === allExtractedData.length - 1 && (
+                              <p className="mt-2">辨識結果「不一定」是百分百正確。</p>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      ))}
+                    </div>
+
+                    {/* 繼續上傳提示 */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-sm text-blue-800 mb-2">
+                        💡 您可以繼續上傳更多病歷，完成後一次性儲存
+                      </p>
+                      <Button
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          setIsCompleted(false)
+                          setExtractedData(null)
+                        }}
+                        className="text-blue-600 border-blue-300 hover:bg-blue-100"
+                      >
+                        繼續上傳
+                      </Button>
+                    </div>
                   </div>
                 )}
 
@@ -510,9 +545,9 @@ export default function MedicalRecordsImportPage() {
                   <Button variant="outline" onClick={() => router.back()} className="bg-transparent">
                     取消
                   </Button>
-                  {isCompleted && (
+                  {allExtractedData.length > 0 && (
                     <Button onClick={handleNext} className="bg-teal-600 hover:bg-teal-700">
-                      下一步
+                      儲存 ({allExtractedData.length}筆記錄)
                     </Button>
                   )}
                 </div>
