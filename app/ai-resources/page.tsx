@@ -38,7 +38,6 @@ import {
   ExternalLink,
   Key,
   Upload,
-  Globe,
 } from "lucide-react"
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
 import FileSelector, { SelectedFileData } from "@/components/ui/file-selector"
@@ -1286,12 +1285,10 @@ function QuickSearchContent({
         icon: <Search className="h-5 w-5 text-blue-600" />,
         personalPolicyCount: result.personalPolicyResults.length,
         networkResourceCount: result.networkResources.length,
-        webResourceCount: result.webResources?.length || 0,
         matchedResources: [
           ...result.personalPolicyResults,
           ...result.networkResources
-        ],
-        webResources: result.webResources || []
+        ]
       }
 
       setSearchResult(formattedResult)
@@ -1347,11 +1344,10 @@ function QuickSearchContent({
     executeSearch(currentSearchTermRef.current)
   }
 
-  // 當按下Enter鍵時搜尋
+  // 取消Enter鍵響應 - 只能透過點擊搜尋按鈕
   const handleKeyDown = (e) => {
-    if (e.key === "Enter") {
-      executeSearch(currentSearchTermRef.current)
-    }
+    // 移除Enter鍵搜尋功能，只能點擊按鈕搜尋
+    return
   }
 
   // 處理推薦搜尋詞點擊
@@ -1396,9 +1392,22 @@ function QuickSearchContent({
                   onKeyDown={handleKeyDown}
                 />
               </div>
-              <Button onClick={handleSearch} className="gap-2 bg-blue-600 hover:bg-blue-700">
-                <Search className="h-4 w-4" />
-                搜尋
+              <Button 
+                onClick={handleSearch} 
+                className="gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                disabled={isSearching}
+              >
+                {isSearching ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    搜尋中...
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4" />
+                    搜尋
+                  </>
+                )}
               </Button>
             </div>
 
@@ -1536,66 +1545,6 @@ function QuickSearchContent({
                   )}
                 </div>
 
-                {/* 網路相關資源 */}
-                {treatment.webResources && Array.isArray(treatment.webResources) && treatment.webResources.length > 0 && (
-                  <div className="mt-6">
-                    <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-                      <Globe className="h-5 w-5 text-blue-600" />
-                      相關網路資源
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                        {treatment.webResources.length} 個連結
-                      </Badge>
-                    </h3>
-                    <div className="grid gap-3">
-                      {treatment.webResources.filter(webResource => webResource && typeof webResource === 'object').map((webResource, index) => (
-                        <div key={index} className="p-4 rounded-lg border border-blue-200 bg-blue-50/50 hover:bg-blue-50 transition-colors">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <ExternalLink className="h-4 w-4 text-blue-600" />
-                                <h4 className="font-medium text-sm text-blue-900">{webResource.title || '未知標題'}</h4>
-                              </div>
-                              <p className="text-sm text-gray-600 mb-2">{webResource.description || '無描述'}</p>
-                              <div className="flex items-center gap-4 text-xs text-gray-500">
-                                <span>來源: {webResource.organization || webResource.source || '未知來源'}</span>
-                                {webResource.category && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {webResource.category}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                            {webResource.url ? (
-                              <a 
-                                href={webResource.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="ml-4"
-                              >
-                                <Button size="sm" variant="outline" className="text-xs gap-1 border-blue-200 text-blue-700 hover:bg-blue-50">
-                                  前往查看
-                                  <ExternalLink className="h-3 w-3" />
-                                </Button>
-                              </a>
-                            ) : webResource.isSuggestion ? (
-                              <div className="ml-4 text-xs text-gray-500">
-                                <div className="font-medium mb-1">🔍 搜尋建議</div>
-                                {webResource.searchKeywords && (
-                                  <div className="text-blue-600 font-mono text-xs bg-blue-50 px-2 py-1 rounded">
-                                    {webResource.searchKeywords}
-                                  </div>
-                                )}
-                                <div className="mt-1 text-xs text-gray-500">
-                                  {webResource.suggestedAction}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* 新增「聽聽大家怎麼說」按鈕 - 使用AI搜尋的真實資料 */}
                 <div className="mt-6 flex justify-center">

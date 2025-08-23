@@ -118,6 +118,34 @@ private generateImageUrl(imageBase64: string): string {
    - 顯示原檔案名稱作為參考
    - 增加保單名稱和類型的詳細資訊顯示
 
+### ✅ 病歷批次上傳功能 (已完成 - 2025-01-22)
+**檔案**: `/app/medical-records/import/page.tsx`
+- **需求**: 用戶希望能夠上傳多張病歷，完成後一次性儲存
+- **實現**: 完整的批次上傳系統
+  - 批次狀態管理: `allExtractedData` 陣列儲存所有分析結果
+  - 多個綠色分析框: 每筆病歷顯示在獨立的綠色 Alert 框中
+  - 繼續上傳功能: 藍色提示框引導用戶繼續上傳更多記錄
+  - 批次儲存: `handleNext()` 迴圈保存所有記錄到 Supabase
+  - 成功頁面: 完整的儲存成功頁面顯示所有已儲存記錄
+
+### ✅ 保單批次上傳功能 (已完成 - 2025-01-22)
+**檔案**: `/app/insurance/import/page.tsx`
+- **需求**: 按照病歷上傳的模式，實現保單批次上傳功能
+- **實現**: 完全相同的批次上傳系統
+  - 批次狀態管理: `allAnalysisResults` 陣列儲存所有保單分析結果
+  - 多個綠色分析框: 每筆保單顯示保險公司、保單名稱、保單號碼、保障期間
+  - 繼續上傳功能: 與病歷上傳相同的 UX 流程
+  - 批次儲存: `saveInsurancePolicyToSupabase()` 函數處理每筆保單
+  - **重要修復**: 修復 `response.json()` 重複調用導致的 "body stream already read" 錯誤
+  - 成功頁面: 顯示所有已儲存保單的詳細資訊
+
+#### 技術細節
+- 狀態管理: 使用 `allAnalysisResults` 陣列儲存批次上傳結果
+- UI 組件: 每筆保單顯示在獨立的綠色框中，標題為「第 X 筆保單：」
+- 錯誤修復: 將 `return await response.json()` 改為 `return result` 避免重複讀取
+- 儲存邏輯: 迴圈調用 `saveInsurancePolicyToSupabase()` 處理每筆記錄
+- 專業免責聲明: 「辨識結果『不一定』是百分百正確。」
+
 ## 🎨 UI/UX 改造計劃 - 轉換至 Zoe 視覺樣式
 
 ### 📋 改造概述
@@ -242,6 +270,16 @@ private generateImageUrl(imageBase64: string): string {
   - 影響範圍：全部保單、醫療險、重疾險、意外險四個Tab頁面
 - **功能驗證**: ✅ 理賠申請功能路徑 `/claims/new?policy=${policy.id}` 正常運作
 
+**第二階段完成**: 批次上傳功能實現 ✅ (2025-01-22)
+- **完成項目**: 
+  - 病歷批次上傳功能 (`/app/medical-records/import/page.tsx`)
+  - 保單批次上傳功能 (`/app/insurance/import/page.tsx`)
+- **技術成就**: 
+  - 完整的批次上傳 UX 流程
+  - 多個綠色分析框顯示
+  - 繼續上傳和批次儲存功能
+  - 修復重要的 response.json() 重複調用錯誤
+
 **下一步**: 等待用戶指定下一個要調整的頁面或組件
 
 ## 🚨 已知待處理事項
@@ -290,6 +328,7 @@ private generateImageUrl(imageBase64: string): string {
 - 圖片MIME type錯誤 ✅
 - 假數據覆蓋真實數據 ✅
 - OCR分析準確性低 ✅
+- 保單批次上傳 response.json() 重複調用錯誤 ✅ (2025-01-22)
 
 ## 📝 開發注意事項
 

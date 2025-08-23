@@ -92,288 +92,10 @@ export class OpenAIService {
     }
   }
 
-  /**
-   * 分析醫療資源匹配條件
-   * @param {string} medicalText - 病例或保單條款文字
-   * @param {CaseData} caseData - 案例資料
-   * @param {string} imageBase64 - 圖片base64 (可選)
-   * @returns {Promise<AnalysisResult>} AI 分析結果
-   */
-  async analyzeResourceMatching(medicalText: string, caseData: CaseData, imageBase64: string | null = null): Promise<AnalysisResult> {
-    const prompt = this.buildResourceMatchingPrompt(medicalText, caseData);
-    
-    const messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: prompt }
-        ]
-      }
-    ];
 
-    // 如果有圖片，加入圖片內容
-    if (imageBase64) {
-      const imageUrl = this.generateImageUrl(imageBase64);
-      console.log(`圖片分析 - 設定圖片URL: ${imageUrl.substring(0, 50)}...`);
-      ;(messages[0].content as any).push({
-        type: "image_url",
-        image_url: {
-          url: imageUrl
-        }
-      });
-    }
 
-    try {
-      console.log("發送 OpenAI API 請求到:", this.baseURL);
-      console.log("使用模型:", 'gpt-4o');
-      
-      const response = await fetch(this.baseURL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: messages,
-          max_tokens: 1500,
-          temperature: 0.3
-        })
-      });
 
-      console.log("OpenAI API 回應狀態:", response.status);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("OpenAI API 錯誤詳情:", errorText);
-        throw new Error(`OpenAI API 錯誤: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log("OpenAI API 回應資料:", data);
-      return this.parseResponse(data);
-    } catch (error) {
-      console.error('OpenAI API 調用失敗:', error);
-      throw new Error(`AI 分析失敗: ${(error as Error).message}`);
-    }
-  }
-
-  /**
-   * 構建醫療資源匹配分析提示語
-   */
-  private buildResourceMatchingPrompt(medicalText: string, caseData: CaseData): string {
-    return `你是一位熟悉台灣醫療保險和健康資源的專業分析師。以下是病例或醫療文件內容：
-
----
-${medicalText}
----
-
-患者基本資料：
----
-年齡: ${caseData.age}
-性別: ${caseData.gender}
-疾病: ${caseData.disease}
-治療方式: ${caseData.treatment}
-其他說明: ${caseData.notes || '無'}
----
-
-請根據上述資料，分析患者可能符合的各種醫療資源和補助：
-
-請以以下格式回覆：
-
-## 🏥 政府補助資源
-[分析可能符合的健保給付、重大傷病卡、政府補助等]
-
-## 🏢 企業福利資源  
-[分析可能的團保理賠、企業醫療福利等]
-
-## 💰 保險理賠資源
-[分析商業保險可能的理賠項目]
-
-## 💳 金融產品資源
-[分析醫療貸款、分期付款等金融協助]
-
-## ⚖️ 法律救助資源
-[分析可能的法律諮詢、醫療糾紛處理等]
-
-## 📋 建議事項
-[給予患者的具體建議和後續行動步驟]
-
-請根據台灣現行的醫療保險制度和相關法規進行分析，提供實用的建議。`;
-  }
-
-  /**
-   * 第1步：基礎病例分析
-   */
-  async analyzeMedicalCase(medicalText: string, caseData: CaseData, imageBase64: string | null = null): Promise<MedicalAnalysisResult> {
-    const prompt = `你是資深的醫療分析專家，具備深厚的臨床經驗和保險理賠知識。請進行專業的醫療案例分析。
-
-${medicalText ? `## 📋 文字資料分析
-${medicalText}
-` : ''}
-
-${imageBase64 ? `## 🖼️ 圖片內容分析
-請仔細檢視並分析圖片中的所有醫療資訊：
-- 診斷證明或病歷內容
-- 檢驗檢查報告和數值
-- 醫師建議和治療計畫
-- 處方藥物和用量
-- 醫院印章和醫師簽名
-- 所有可見的醫療專業術語
-
-**重要**：請逐字識別圖片中的文字內容，不要只提供概括描述。
-` : ''}
-
-## 👤 患者基本資料
-- **年齡**: ${caseData.age}
-- **性別**: ${caseData.gender}
-- **疾病狀況**: ${caseData.disease}
-- **治療情況**: ${caseData.treatment}
-
-## 🎯 分析要求
-請根據所有可獲得的資訊（包括文字和圖片內容），進行專業醫療分析並以JSON格式回覆：
-
-{
-  "disease": "具體的疾病診斷（基於圖片和文字內容的實際診斷）",
-  "severity": "嚴重程度評估 (輕微/中度/重度/危急)",
-  "treatmentStage": "當前治療階段 (初期診斷/積極治療/康復期/長期管理)",
-  "estimatedCost": "預估醫療費用範圍（基於疾病類型和治療複雜度）",
-  "careNeeds": "護理和照護需求評估",
-  "familyImpact": "對家庭生活和經濟的影響程度分析"
-}
-
-請確保分析基於實際的醫療資訊，而非僅根據患者提供的基本資料。`;
-
-    const response = await this.callAPI(prompt, imageBase64 ? 'gpt-4o' : 'gpt-4o-mini', imageBase64);
-    return this.parseMedicalAnalysisResponse(response.content);
-  }
-
-  /**
-   * 第2步：搜尋政府補助資源
-   */
-  async searchGovernmentSubsidies(medicalAnalysis: MedicalAnalysisResult): Promise<ResourceItem[]> {
-    const prompt = `根據以下病例分析，搜尋台灣的政府補助資源：
-
-病例分析：
-- 疾病：${medicalAnalysis.disease}
-- 嚴重程度：${medicalAnalysis.severity}
-- 治療階段：${medicalAnalysis.treatmentStage}
-- 預估費用：${medicalAnalysis.estimatedCost}
-
-請搜尋相關的政府補助資源，包括：
-- 中央健保給付項目
-- 重大傷病相關補助
-- 地方政府醫療補助
-- 社會救助資源
-
-以 JSON 格式回覆：
-{
-  "resources": [
-    {
-      "title": "補助項目名稱",
-      "organization": "主辦機關",
-      "category": "政府補助",
-      "subcategory": "國家級/縣市級/區里級",
-      "eligibility": "申請資格",
-      "amount": "補助金額",
-      "deadline": "申請期限",
-      "details": "詳細說明",
-      "priority": "high/medium/low",
-      "status": "eligible/conditional",
-      "matchedConditions": ["匹配的病症1", "匹配的病症2"]
-    }
-  ]
-}`;
-
-    const response = await this.callAPI(prompt, 'gpt-4o-mini');
-    const result = this.parseJSONResponse(response.content);
-    return this.formatResources(result.resources || [], 'gov');
-  }
-
-  /**
-   * 第3步：搜尋企業福利資源
-   */
-  async searchCorporateBenefits(medicalAnalysis: MedicalAnalysisResult): Promise<ResourceItem[]> {
-    const prompt = `根據以下病例分析，搜尋台灣的企業福利資源：
-
-病例分析：
-- 疾病：${medicalAnalysis.disease}
-- 嚴重程度：${medicalAnalysis.severity}
-- 治療階段：${medicalAnalysis.treatmentStage}
-
-請搜尋相關的企業福利資源，包括：
-- 大型企業員工醫療補助
-- 團體保險理賠
-- 企業社會責任醫療專案
-- 產業工會互助金
-
-以 JSON 格式回覆：
-{
-  "resources": [
-    {
-      "title": "福利項目名稱",
-      "organization": "企業/組織名稱",
-      "category": "企業福利",
-      "subcategory": "員工福利/企業社會責任",
-      "eligibility": "申請資格",
-      "amount": "補助金額",
-      "deadline": "申請期限",
-      "details": "詳細說明",
-      "priority": "high/medium/low",
-      "status": "eligible/conditional",
-      "matchedConditions": ["匹配的病症1", "匹配的病症2"]
-    }
-  ]
-}`;
-
-    const response = await this.callAPI(prompt, 'gpt-4o-mini');
-    const result = this.parseJSONResponse(response.content);
-    return this.formatResources(result.resources || [], 'corp');
-  }
-
-  /**
-   * 第4步：分析保單理賠資源
-   */
-  async analyzeInsuranceClaims(medicalAnalysis: MedicalAnalysisResult, policyText: string, policyImageBase64: string | null = null): Promise<ResourceItem[]> {
-    const prompt = `請比對病例與保單條款，分析可理賠項目：
-
-病例分析：
-- 疾病：${medicalAnalysis.disease}
-- 嚴重程度：${medicalAnalysis.severity}
-- 治療階段：${medicalAnalysis.treatmentStage}
-- 預估費用：${medicalAnalysis.estimatedCost}
-
-${policyText ? `保單條款文字：
----
-${policyText}
----
-` : ''}
-
-${policyImageBase64 ? '請仔細分析保單圖片中的所有條款內容，包括保障項目、理賠條件、給付金額、免責條款等。' : ''}
-
-請分析可理賠的項目，以 JSON 格式回覆：
-{
-  "resources": [
-    {
-      "title": "理賠項目名稱",
-      "organization": "保險公司名稱",
-      "category": "保單理賠",
-      "subcategory": "醫療險/重疾險/意外險",
-      "eligibility": "理賠條件",
-      "amount": "理賠金額",
-      "deadline": "申請期限",
-      "details": "理賠說明",
-      "priority": "high/medium/low",
-      "status": "eligible/conditional",
-      "matchedConditions": ["匹配的病症1", "匹配的病症2"]
-    }
-  ]
-}`;
-
-    const response = await this.callAPI(prompt, 'gpt-4o-mini', policyImageBase64);
-    const result = this.parseJSONResponse(response.content);
-    return this.formatResources(result.resources || [], 'ins');
-  }
 
   /**
    * 統一的 API 調用方法
@@ -401,7 +123,7 @@ ${policyImageBase64 ? '請仔細分析保單圖片中的所有條款內容，包
         body: JSON.stringify({
           model: model,
           messages: messages,
-          max_tokens: model.includes('gpt-4') ? 4000 : 1000,
+          max_tokens: model.includes('gpt-4') ? 4000 : 3000,
           temperature: 0.3
         })
       });
@@ -419,44 +141,6 @@ ${policyImageBase64 ? '請仔細分析保單圖片中的所有條款內容，包
     }
   }
 
-  /**
-   * 解析醫療分析回應
-   */
-  private parseMedicalAnalysisResponse(content: string): MedicalAnalysisResult {
-    try {
-      // 提取 JSON 部分
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        console.log('✅ 醫療分析 JSON 解析成功:', parsed);
-        
-        // 確保所有必要欄位存在，提供預設值
-        return {
-          disease: parsed.disease || '無法識別疾病',
-          severity: parsed.severity || '無法判定嚴重程度',
-          treatmentStage: parsed.treatmentStage || '無法判定治療階段',
-          estimatedCost: parsed.estimatedCost || '無法估算費用',
-          careNeeds: parsed.careNeeds || '無法分析照護需求',
-          familyImpact: parsed.familyImpact || '無法分析家庭影響'
-        };
-      }
-      console.error('❌ 醫療分析無法找到有效的 JSON 回應，原始內容:', content);
-      throw new Error('無法找到有效的 JSON 回應');
-    } catch (error) {
-      console.error('❌ 醫療分析 JSON 解析失敗:', error);
-      console.error('原始回應內容:', content);
-      
-      // 返回預設醫療分析結果
-      return {
-        disease: 'AI分析失敗，請檢查上傳的醫療文件是否清晰',
-        severity: '無法自動判定，建議諮詢醫師',
-        treatmentStage: '無法自動分析，建議與醫療團隊討論',
-        estimatedCost: '無法自動估算，請向醫療機構詢問',
-        careNeeds: '無法自動分析，建議諮詢護理師或社工師',
-        familyImpact: '無法自動評估，建議家庭討論與規劃'
-      };
-    }
-  }
 
   /**
    * 解析 JSON 回應（支援 markdown 代碼塊格式）
@@ -503,25 +187,6 @@ ${policyImageBase64 ? '請仔細分析保單圖片中的所有條款內容，包
     }
   }
 
-  /**
-   * 格式化資源資料
-   */
-  private formatResources(resources: any[], type: string): ResourceItem[] {
-    return resources.map((resource, index) => ({
-      id: `${type}-ai-${Date.now()}-${index}`,
-      category: resource.category || (type === 'gov' ? '政府補助' : type === 'corp' ? '企業福利' : '保單理賠'),
-      subcategory: resource.subcategory || '',
-      title: resource.title || '',
-      organization: resource.organization || '',
-      eligibility: resource.eligibility || '',
-      amount: resource.amount || '',
-      deadline: resource.deadline || '',
-      matchedConditions: resource.matchedConditions || [],
-      details: resource.details || '',
-      priority: resource.priority || 'medium',
-      status: resource.status || 'eligible'
-    }));
-  }
 
   /**
    * 分析診斷證明文件
@@ -948,101 +613,101 @@ ${imageBase64 ? `## 🖼️ 圖片內容分析
 
       const prompt = `你是資深保險文件分析專家，專門識別保險保單中的關鍵資訊。請非常仔細地閱讀和分析所有內容。
 
-${text ? `## 📋 文字資料分析${text}` : ''}
+            ${text ? `## 📋 文字資料分析${text}` : ''}
 
-${imageBase64 ? `## 🖼️ 圖片內容分析
-請仔細檢視並分析圖片中的所有保單資訊：
-- 保險公司名稱和標誌
-- 保單類型和名稱
-- 保單號碼和日期
-- 保障內容和金額（特別注意金額單位）
-- 被保險人資訊
-- 所有可見的保險條款內容
+            ${imageBase64 ? `## 🖼️ 圖片內容分析
+            請仔細檢視並分析圖片中的所有保單資訊：
+            - 保險公司名稱和標誌
+            - 保單類型和名稱
+            - 保單號碼和日期
+            - 保障內容和金額（特別注意金額單位）
+            - 被保險人資訊
+            - 所有可見的保險條款內容
 
-**重要**：請逐字識別圖片中的文字內容，不要只提供概括描述。
-` : ''}
+            **重要**：請逐字識別圖片中的文字內容，不要只提供概括描述。
+            ` : ''}
 
-## 📤 輸出格式（請同時提供兩個區塊，第二區塊為本系統主用）
+            ## 📤 輸出格式（請同時提供兩個區塊，第二區塊為本系統主用）
 
-### A) flatFields（保留原有需求）
-{
-  "company": "保險公司名稱",
-  "type": "保單類型（必須三選一：醫療險/重疾險/意外險）",
-  "name": "保單名稱",
-  "number": "保單號碼",
-  "startDate": "YYYY-MM-DD",
-  "endDate": "YYYY-MM-DD",
-  "coverage": [
-    { "name": "保障項目名稱", "amount": "金額數字", "unit": "完整單位" }
-  ],
-  "maxClaimAmount": "最高理賠金額數字",
-  "maxClaimUnit": "最高理賠金額單位",
-  "insuredName": "被保險人姓名",
-  "beneficiary": "受益人姓名"
-}
+            ### A) flatFields（保留原有需求）
+            {
+              "company": "保險公司名稱",
+              "type": "保單類型（必須三選一：醫療險/重疾險/意外險）",
+              "name": "保單名稱",
+              "number": "保單號碼",
+              "startDate": "YYYY-MM-DD",
+              "endDate": "YYYY-MM-DD",
+              "coverage": [
+                { "name": "保障項目名稱", "amount": "金額數字", "unit": "完整單位" }
+              ],
+              "maxClaimAmount": "最高理賠金額數字",
+              "maxClaimUnit": "最高理賠金額單位",
+              "insuredName": "被保險人姓名",
+              "beneficiary": "受益人姓名"
+            }
 
-### B) policyInfo（本系統主用；請嚴格符合此結構字段命名）
-{
-  "policyBasicInfo": {
-    "insuranceCompany": "保險公司名稱",
-    "policyName": "保單名稱",
-    "policyType": "保單類型（必須三選一：醫療險/重疾險/意外險）",
-    "policyNumber": "保單號碼",
-    "effectiveDate": "YYYY-MM-DD",
-    "expiryDate": "YYYY-MM-DD",
-    "policyTerms": "（可選）條款重點或原文摘錄"
-  },
-  "coverageDetails": {
-    "coverage": [
-      { "name": "保障項目名稱", "amount": "金額數字", "unit": "完整單位" }
-    ]
-  },
-  "insuredPersonInfo": {
-    "name": "（可選）被保險人姓名"
-  },
-  "beneficiaryInfo": {
-    "name": "（可選）受益人姓名"
-  }
-}
-  
-特別注意policyTerms輸出規範（務必遵守）：
-僅以 單行文字 輸出保單條款，各項以 半形逗號+空格 分隔。
-金額：用阿拉伯數字，不要加千分位逗號（例：3000、100000、500000）。
-非金額的數字（例如天數、次數上限等）請改為中文數字（例：一百八十天、三十天）。
-每項格式固定為：
-　　{項目名稱} {金額}元/{頻率}(可選的補充說明)
-　　例：住院醫療 3000元/日(最多一百八十天)
-不可出現重複空白、全形標點或混用全形逗號。
-禁止在金額中出現任何非數字字元（不可有逗號、空白、文字）。
-範例（完全照這種風格）：
-住院醫療 3000元/日(最多一百八十天), 手術費用 100000元/次, 癌症治療 500000元/年
+            ### B) policyInfo（本系統主用；請嚴格符合此結構字段命名）
+            {
+              "policyBasicInfo": {
+                "insuranceCompany": "保險公司名稱",
+                "policyName": "保單名稱",
+                "policyType": "保單類型（必須三選一：醫療險/重疾險/意外險）",
+                "policyNumber": "保單號碼",
+                "effectiveDate": "YYYY-MM-DD",
+                "expiryDate": "YYYY-MM-DD",
+                "policyTerms": "（可選）條款重點或原文摘錄"
+              },
+              "coverageDetails": {
+                "coverage": [
+                  { "name": "保障項目名稱", "amount": "金額數字", "unit": "完整單位" }
+                ]
+              },
+              "insuredPersonInfo": {
+                "name": "（可選）被保險人姓名"
+              },
+              "beneficiaryInfo": {
+                "name": "（可選）受益人姓名"
+              }
+            }
+              
+            特別注意policyTerms輸出規範（務必遵守）：
+            僅以 單行文字 輸出保單條款，各項以 半形逗號+空格 分隔。
+            金額：用阿拉伯數字，不要加千分位逗號（例：3000、100000、500000）。
+            非金額的數字（例如天數、次數上限等）請改為中文數字（例：一百八十天、三十天）。
+            每項格式固定為：
+            　　{項目名稱} {金額}元/{頻率}(可選的補充說明)
+            　　例：住院醫療 3000元/日(最多一百八十天)
+            不可出現重複空白、全形標點或混用全形逗號。
+            禁止在金額中出現任何非數字字元（不可有逗號、空白、文字）。
+            範例（完全照這種風格）：
+            住院醫療 3000元/日(最多一百八十天), 手術費用 100000元/次, 癌症治療 500000元/年
 
 
-## 🧭 保單類型歸類規則（強制）
-- 請根據保障內容將保單類型歸入以下三類之一：
-  1) 醫療險（住院日額、手術費、實支實付、門診、住院醫療等）
-  2) 重疾險（重大疾病、癌症一次給付、特定疾病一次金等）
-  3) 意外險（意外身故/失能/傷害醫療、骨折/燒燙傷等意外相關）
-- 若原文出現不在三類中的名稱（如：壽險、年金、壽險附約），請判斷其保障重點並歸入三類中「最接近的一類」，並在必要時於 flatFields 的說明性欄位（如 notes）或 policyTerms 摘要中簡短說明歸類理由。
-- A) 的 type 與 B) 的 policyBasicInfo.policyType 兩處必須一致且僅能填寫：醫療險/重疾險/意外險。
+            ## 🧭 保單類型歸類規則（強制）
+            - 請根據保障內容將保單類型歸入以下三類之一：
+              1) 醫療險（住院日額、手術費、實支實付、門診、住院醫療等）
+              2) 重疾險（重大疾病、癌症一次給付、特定疾病一次金等）
+              3) 意外險（意外身故/失能/傷害醫療、骨折/燒燙傷等意外相關）
+            - 若原文出現不在三類中的名稱（如：壽險、年金、壽險附約），請判斷其保障重點並歸入三類中「最接近的一類」，並在必要時於 flatFields 的說明性欄位（如 notes）或 policyTerms 摘要中簡短說明歸類理由。
+            - A) 的 type 與 B) 的 policyBasicInfo.policyType 兩處必須一致且僅能填寫：醫療險/重疾險/意外險。
 
-## 🔥 金額與單位規則
-- 金額只填純數字（如：10、5000、300），單位填完整描述（如：萬元、元/日、萬元/次）。
-- 「10萬」請拆為 amount: "10"、unit: "萬元/次""元/日"。
-- 單位可包含時間頻率：/日、/次、/年、/月。
+            ## 🔥 金額與單位規則
+            - 金額只填純數字（如：10、5000、300），單位填完整描述（如：萬元、元/日、萬元/次）。
+            - 「10萬」請拆為 amount: "10"、unit: "萬元/次""元/日"。
+            - 單位可包含時間頻率：/日、/次、/年、/月。
 
-## 🏆 最高理賠金額專業判斷（flatFields 中）
-- 不是單純取 coverage 項目的最大金額。
-- 需考慮保單類型、保障可同時觸發的可能性與條款上限。
-- 若文件明確載明理賠上限，優先使用。
- - 請輸出「單一理賠事件的整筆金額」，單位僅能是「元/萬元/百萬元/新台幣元/新台幣萬元」。
- - 禁止在 maxClaimUnit 中出現任何時間/頻率字樣（例如：/日、/次、/年、/月、日、次、年、月、天）。
- - 若只能得到日額或次額，請推估單一事故最高整筆金額；無法合理推估則將 maxClaimAmount 與 maxClaimUnit 留空字串。
- - 為避免顯示 0 元，若缺乏明確上限，請提供保守估算並於 notes 說明（除非條款明文為 0 元，需在 notes 引用條款要點）。
+            ## 🏆 最高理賠金額專業判斷（flatFields 中）
+            - 不是單純取 coverage 項目的最大金額。
+            - 需考慮保單類型、保障可同時觸發的可能性與條款上限。
+            - 若文件明確載明理賠上限，優先使用。
+            - 請輸出「單一理賠事件的整筆金額」，單位僅能是「元/萬元/百萬元/新台幣元/新台幣萬元」。
+            - 禁止在 maxClaimUnit 中出現任何時間/頻率字樣（例如：/日、/次、/年、/月、日、次、年、月、天）。
+            - 若只能得到日額或次額，請推估單一事故最高整筆金額；無法合理推估則將 maxClaimAmount 與 maxClaimUnit 留空字串。
+            - 為避免顯示 0 元，若缺乏明確上限，請提供保守估算並於 notes 說明（除非條款明文為 0 元，需在 notes 引用條款要點）。
 
-## 🎯 其他提醒
-- 只填入從文件可清楚識別的資訊；無法識別者填空字串。日期用 YYYY-MM-DD。
-- 回傳 JSON 時，請同時包含 A) 與 B) 兩個區塊於同一個最外層物件：{ "flatFields": {...}, "policyInfo": {...} }。`;
+            ## 🎯 其他提醒
+            - 只填入從文件可清楚識別的資訊；無法識別者填空字串。日期用 YYYY-MM-DD。
+            - 回傳 JSON 時，請同時包含 A) 與 B) 兩個區塊於同一個最外層物件：{ "flatFields": {...}, "policyInfo": {...} }。`;
 
       const messages = [
         {
@@ -1241,78 +906,78 @@ ${summary?.flatFields ? `## 其他摘要（flatFields）\n${JSON.stringify(summa
 
       const prompt = `你是資深醫療文件分析專家，專門識別各種醫療文件（病歷、診斷證明書、檢查報告等）中的關鍵資訊。
 
-## 📋 文件類型智能判斷
-請先判斷文件類型，然後提取相應資訊：
-- **病歷記錄**：門診或住院記錄、就診紀錄
-- **診斷證明書**：正式醫療證明文件
-- **檢查報告**：各種醫學檢驗結果
+            ## 📋 文件類型智能判斷
+            請先判斷文件類型，然後提取相應資訊：
+            - **病歷記錄**：門診或住院記錄、就診紀錄
+            - **診斷證明書**：正式醫療證明文件
+            - **檢查報告**：各種醫學檢驗結果
 
-${text ? `## 📋 文字資料分析
-${text}
-` : ''}
+            ${text ? `## 📋 文字資料分析
+            ${text}
+            ` : ''}
 
-${imageBase64 ? `## 🖼️ 圖片內容分析
-請仔細檢視並分析圖片中的所有醫療資訊：
+            ${imageBase64 ? `## 🖼️ 圖片內容分析
+            請仔細檢視並分析圖片中的所有醫療資訊：
 
-**基本資訊區域**
-- 醫院名稱與標誌（通常在表頭）
-- 文件標題類型（病歷、診斷證明、檢查報告等）
-- 病患姓名、出生日期、身分證字號（如有顯示）
-- 就診科別與醫師姓名
+            **基本資訊區域**
+            - 醫院名稱與標誌（通常在表頭）
+            - 文件標題類型（病歷、診斷證明、檢查報告等）
+            - 病患姓名、出生日期、身分證字號（如有顯示）
+            - 就診科別與醫師姓名
 
-**醫療內容區域**  
-- 就診日期或檢查日期
-- 診斷代碼與診斷名稱（ICD碼或中文診斷）
-- 主要疾病或醫療主題
-- 檢查或檢驗項目（如X光、心電圖等）
-- 治療方案與處置建議
-- 用藥記錄（藥名、劑量、天數等）
-- 休養建議或工作限制
+            **醫療內容區域**  
+            - 就診日期或檢查日期
+            - 診斷代碼與診斷名稱（ICD碼或中文診斷）
+            - 主要疾病或醫療主題
+            - 檢查或檢驗項目（如X光、心電圖等）
+            - 治療方案與處置建議
+            - 用藥記錄（藥名、劑量、天數等）
+            - 休養建議或工作限制
 
-**認證資訊區域**
-- 醫師簽章或印章
-- 證明書開立日期
-- 是否為意外傷害相關
+            **認證資訊區域**
+            - 醫師簽章或印章
+            - 證明書開立日期
+            - 是否為意外傷害相關
 
-**重要規則**：
-1. 必須逐字識別文件中的資訊，嚴禁只給概括描述
-2. 不同格式文件欄位名稱不同，要能正確對應抽取
-3. 如果某欄位沒有出現，就填入空字串 ""
-4. 不可憑常識或經驗補充資料，只能來自實際文件內容
-5. 日期一律轉換為 YYYY-MM-DD 格式
-6. "isFirstOccurrence" 請依文件內容判斷：若明確顯示為初診填 yes，若顯示為複診填 no，否則填 unknown
-` : ''}
+            **重要規則**：
+            1. 必須逐字識別文件中的資訊，嚴禁只給概括描述
+            2. 不同格式文件欄位名稱不同，要能正確對應抽取
+            3. 如果某欄位沒有出現，就填入空字串 ""
+            4. 不可憑常識或經驗補充資料，只能來自實際文件內容
+            5. 日期一律轉換為 YYYY-MM-DD 格式
+            6. "isFirstOccurrence" 請依文件內容判斷：若明確顯示為初診填 yes，若顯示為複診填 no，否則填 unknown
+            ` : ''}
 
-## 📤 標準輸出格式
+            ## 📤 標準輸出格式
 
-請務必以以下JSON格式輸出（對齊病歷編輯頁面欄位）：
+            請務必以以下JSON格式輸出（對齊病歷編輯頁面欄位）：
 
-{
-  "patientName": "患者姓名",
-  "patientAge": "年齡（數字）",
-  "patientGender": "性別（male/female/other）",
-  "hospitalName": "醫院名稱",
-  "department": "科別",
-  "doctorName": "主治醫師",
-  "visitDate": "就診日期 YYYY-MM-DD",
-  "isFirstOccurrence": "是否首次發病（yes/no/unknown）",
-  "medicalExam": "醫學檢查項目",
-  "diagnosis": "診斷結果",
-  "symptoms": "症狀描述",
-  "treatment": "治療方式",
-  "medications": "用藥記錄",
-  "notes": "備註"
-}
+            {
+              "patientName": "患者姓名",
+              "patientAge": "年齡（數字）",
+              "patientGender": "性別（male/female/other）",
+              "hospitalName": "醫院名稱",
+              "department": "科別",
+              "doctorName": "主治醫師",
+              "visitDate": "就診日期 YYYY-MM-DD",
+              "isFirstOccurrence": "是否首次發病（yes/no/unknown）",
+              "medicalExam": "醫學檢查項目",
+              "diagnosis": "診斷結果",
+              "symptoms": "症狀描述",
+              "treatment": "治療方式",
+              "medications": "用藥記錄",
+              "notes": "備註"
+            }
 
-**重要提醒**：
-- 保持所有欄位固定，即使文件未提供該資訊也要輸出該欄位，值為 ""
-- 僅能依據文件實際內容填寫，禁止推測或臆測
-- patientAge 填入純數字，如 "45"
-- patientGender 只能填 "male", "female", "other" 三選一
-- isFirstOccurrence 只能填 "yes", "no", "unknown" 三選一
-- visitDate 統一格式為 YYYY-MM-DD
+            **重要提醒**：
+            - 保持所有欄位固定，即使文件未提供該資訊也要輸出該欄位，值為 ""
+            - 僅能依據文件實際內容填寫，禁止推測或臆測
+            - patientAge 填入純數字，如 "45"
+            - patientGender 只能填 "male", "female", "other" 三選一
+            - isFirstOccurrence 只能填 "yes", "no", "unknown" 三選一
+            - visitDate 統一格式為 YYYY-MM-DD
 
-請開始分析：`;
+            請開始分析：`;
 
 
 
@@ -1602,34 +1267,34 @@ ${policyText}
   }> {
     const prompt = `你是台灣醫療費用分析專家，請針對「${searchTerm}」提供精準的費用分析。
 
-## 🎯 分析要求
-1. **識別醫療項目類型**：手術/治療/檢查/藥物/器材等
-2. **區分自費與健保項目**：明確標示哪些健保有給付
-3. **提供費用區間**：最低-最高費用範圍
-4. **考慮台灣醫療現況**：健保制度、醫學中心與地區醫院差異
+            ## 🎯 分析要求
+            1. **識別醫療項目類型**：手術/治療/檢查/藥物/器材等
+            2. **區分自費與健保項目**：明確標示哪些健保有給付
+            3. **提供費用區間**：最低-最高費用範圍
+            4. **考慮台灣醫療現況**：健保制度、醫學中心與地區醫院差異
 
-## ⚠️ 重要原則
-- 只提供確實存在的醫療項目資訊
-- 費用必須基於台灣醫療市場實況
-- 區分「健保給付」與「自費」部分
-- 如果是非醫療項目，請明確說明
+            ## ⚠️ 重要原則
+            - 只提供確實存在的醫療項目資訊
+            - 費用必須基於台灣醫療市場實況
+            - 區分「健保給付」與「自費」部分
+            - 如果是非醫療項目，請明確說明
 
-## 📊 回傳格式
-{
-  "isValidMedicalTerm": true/false,
-  "medicalCategory": "手術/治療/檢查/藥物/復健/其他",
-  "estimatedCost": "完整費用範圍描述",
-  "costSource": "費用來源說明",
-  "costBreakdown": {
-    "healthInsuranceCovered": "健保給付部分",
-    "selfPaidPortion": "自費部分",
-    "totalRange": "總費用範圍",
-    "factors": ["影響費用的因素列表"]
-  },
-  "explanation": "詳細說明"
-}
+            ## 📊 回傳格式
+            {
+              "isValidMedicalTerm": true/false,
+              "medicalCategory": "手術/治療/檢查/藥物/復健/其他",
+              "estimatedCost": "完整費用範圍描述",
+              "costSource": "費用來源說明",
+              "costBreakdown": {
+                "healthInsuranceCovered": "健保給付部分",
+                "selfPaidPortion": "自費部分",
+                "totalRange": "總費用範圍",
+                "factors": ["影響費用的因素列表"]
+              },
+              "explanation": "詳細說明"
+            }
 
-請確保資訊準確且實用。如果搜尋詞不是醫療相關，請在isValidMedicalTerm中標註false。`;
+            請確保資訊準確且實用。如果搜尋詞不是醫療相關，請在isValidMedicalTerm中標註false。`;
 
     try {
       const response = await this.callAPI(prompt, 'gpt-4o');
@@ -1650,271 +1315,9 @@ ${policyText}
     }
   }
 
-  /**
-   * 真實網路搜尋（整合搜尋引擎）
-   */
-  async searchWebResources(searchTerm: string, category: string): Promise<any[]> {
-    console.log(`🔍 開始真實網路搜尋: ${searchTerm} - ${category}`);
-    
-    try {
-      // TODO: 實作真正的網路搜尋
-      // 目前暫時返回知名的台灣官方網站作為替代方案
-      const knownOfficialSites = this.getKnownOfficialSites(searchTerm, category);
-      
-      if (knownOfficialSites.length > 0) {
-        console.log(`✅ 找到 ${knownOfficialSites.length} 個已知官方資源`);
-        return knownOfficialSites;
-      }
 
-      // 備用方案：使用 AI 生成建議（但標明為「建議搜尋」）
-      return await this.generateSearchSuggestions(searchTerm, category);
-      
-    } catch (error) {
-      console.error('網路資源搜尋失敗:', error);
-      return [];
-    }
-  }
 
-  /**
-   * 獲取已知的台灣官方網站資源
-   */
-  private getKnownOfficialSites(searchTerm: string, category: string): any[] {
-    const officialSites = [];
-    
-    // 政府相關網站
-    if (category === '政府補助') {
-      officialSites.push(
-        {
-          title: "衛生福利部中央健康保險署",
-          url: "https://www.nhi.gov.tw/",
-          description: "全民健康保險相關服務與資訊查詢",
-          organization: "衛生福利部中央健康保險署",
-          category: "政府補助",
-          relevanceScore: "high",
-          pageType: "官方網站",
-          verified: true
-        },
-        {
-          title: "衛生福利部社會及家庭署",
-          url: "https://www.sfaa.gov.tw/",
-          description: "社會福利、身心障礙、兒少福利等服務",
-          organization: "衛生福利部社會及家庭署",
-          category: "政府補助",
-          relevanceScore: "high",
-          pageType: "官方網站",
-          verified: true
-        }
-      );
-    }
-    
-    // 金融相關網站
-    if (category === '金融產品') {
-      officialSites.push(
-        {
-          title: "臺灣銀行個人金融服務",
-          url: "https://www.bot.com.tw/tw/personal",
-          description: "個人貸款、信用卡等金融服務",
-          organization: "臺灣銀行",
-          category: "金融產品",
-          relevanceScore: "high",
-          pageType: "官方網站",
-          verified: true
-        }
-      );
-    }
-    
-    // 過濾與搜尋詞相關的網站
-    return officialSites.filter(site => {
-      const searchLower = searchTerm.toLowerCase();
-      const titleLower = site.title.toLowerCase();
-      const descLower = site.description.toLowerCase();
-      
-      // 簡單的關鍵字匹配邏輯
-      if (searchLower.includes('糖尿病') || searchLower.includes('醫療')) {
-        return true;
-      }
-      if (searchLower.includes('貸款') && site.category === '金融產品') {
-        return true;
-      }
-      
-      return titleLower.includes(searchLower) || descLower.includes(searchLower);
-    });
-  }
 
-  /**
-   * 生成搜尋建議（標明為非真實網址）
-   */
-  private async generateSearchSuggestions(searchTerm: string, category: string): Promise<any[]> {
-    const prompt = `針對「${searchTerm}」在${category}領域，請建議用戶可以搜尋的關鍵字和機構名稱。
-
-## 📋 回傳格式
-{
-  "searchSuggestions": [
-    {
-      "title": "建議搜尋：[機構名稱] + [服務項目]",
-      "searchKeywords": "建議搜尋關鍵字",
-      "organization": "建議查詢的機構名稱",
-      "description": "說明該機構可能提供的服務",
-      "category": "${category}",
-      "suggestedAction": "建議前往官網或致電詢問"
-    }
-  ]
-}
-
-重要：請明確標示這是「搜尋建議」，不是真實網址。`;
-
-    try {
-      const response = await this.callAPI(prompt, 'gpt-4o-mini');
-      const result = this.parseJSONResponse(response.content);
-      
-      // 轉換為統一格式，但標明為搜尋建議
-      return (result.searchSuggestions || []).map((suggestion: any, index: number) => ({
-        title: suggestion.title || `搜尋建議 ${index + 1}`,
-        url: null, // 明確標示沒有真實網址
-        description: suggestion.description || '',
-        organization: suggestion.organization || '',
-        category: suggestion.category || category,
-        relevanceScore: "medium",
-        pageType: "搜尋建議",
-        searchKeywords: suggestion.searchKeywords || '',
-        suggestedAction: suggestion.suggestedAction || '建議上網搜尋或致電詢問',
-        verified: false,
-        isSuggestion: true
-      }));
-      
-    } catch (error) {
-      console.error('生成搜尋建議失敗:', error);
-      return [];
-    }
-  }
-
-  /**
-   * 第二階段：政府資源精準搜尋
-   */
-  async oldSearchGovernmentResources(searchTerm: string, costInfo: any): Promise<any[]> {
-    const prompt = `你是台灣政府醫療資源專家。針對「${searchTerm}」，請基於你的知識庫提供相關的政府補助資源。
-
-## 🔍 智能搜尋策略
-
-### 1. 醫療程序/治療/場景基礎分析
-- 當用戶輸入醫療程序（如：開刀、化療、復健）→ 分析對應的常見疾病類型
-- 當用戶輸入治療場景（如：住院、門診、長照）→ 匹配相關補助類型
-- 當用戶輸入特定疾病→ 直接匹配專病補助
-
-### 2. 搜索詞分類邏輯
-- **過於狹窄**：單一症狀 → 拓展至相關疾病群組
-- **過於廣泛**：一般醫療 → 聚焦於高需求補助項目
-- **適中範圍**：特定疾病或治療 → 直接精準匹配
-
-### 3. 搜尋優先級
-1. **高優先級**：健保重大傷病、罕見疾病、身心障礙
-2. **中優先級**：縣市醫療補助、特定疾病專案
-3. **低優先級**：一般性醫療費用減免
-
-## ⚠️ 重要原則
-- 只提供你確實知道存在的具體政府資源
-- 如果不確定具體機構名稱，請使用「建議洽詢相關單位」
-- 不要編造「某醫院」、「某機構」等模糊名稱
-- 優先提供大框架的補助類型和方向指引
-
-## 🎯 搜尋重點
-1. **健保制度框架**：是否有健保給付、特材給付、重大傷病卡
-2. **已知的重大補助**：重大傷病、罕見疾病、身心障礙
-3. **中央政府資源**：衛福部、勞動部、原民會等專案補助
-4. **地方政府資源**：縣市政府社會局醫療補助
-5. **慈善基金會**：如慈濟基金會、陽光基金會等知名機構
-
-## 📋 回傳格式
-{
-  "resources": [
-    {
-      "title": "補助名稱（如：健保重大傷病給付）",
-      "organization": "確定的機關名稱（如：衛生福利部中央健康保險署）或「建議洽詢相關單位」",
-      "category": "政府補助",
-      "subcategory": "中央/地方/健保/慈善",
-      "eligibility": "具體申請條件說明，包含收入限制、疾病條件、身份要求等",
-      "amount": "具體補助金額範圍或比例（如：每月最高3萬元、醫療費用80%等），如不確定則註明「依個案評估」",
-      "deadline": "申請期限說明（如：常年受理、事故發生後30天內、每年3-5月申請等）",
-      "details": "補助內容詳細說明，包含給付項目、使用限制、注意事項等",
-      "priority": "high/medium/low",
-      "status": "eligible/conditional",
-      "applicationProcess": "詳細申請流程，包含所需文件、申請地點、審核時間等",
-      "contactInfo": "具體聯絡方式：電話號碼、地址或1957福利諮詢專線",
-      "websites": ["官方網址1", "相關資訊網址2", "申請表單網址3"]
-    }
-  ]
-}
-以下是範本，我搜尋的關鍵字為：“達文西手術”
-用戶輸入的關鍵字格式為：「 醫療行為or 治療方式 or情境（例如:80歲老人跌倒導致骨折、3歲嬰兒因為保母照顧不周導致肺部感染）」，此關鍵字用來搜尋相關台灣國內補助和補助資源（企業、政府、社會福利...等）， 透過ai的專業知識以及搜尋能力幫我找到 ，如果此醫療行為或症狀太過狹隘或資訊不足，那也請思考並幫我歸類此醫療行為，透過概括的方式去查找，我希望得到以下幾個關鍵欄位 1.申請資格（例如ＸＸ員工，台灣公民，ＹＹ成員..等） 2.補助/理賠金額 3.申請期限(例如：常年受理) 基本描述（例如：針對罹患重大疾病的台積電正職員工，提供醫療費用補助、有薪病假等福利） 4.相關連結（申請的網站為優先）
-如果查找與思考後的資料為（以達文西手術為例）：
-社會福利／民間補助：慈濟基金會醫療補助（全台受理，社工評估）
-1. 申請資格 居住台灣地區、因病或重大事故導致經濟困難的個人／家庭；需提供基本資料與經濟狀況證明，經社工訪視評估。 tw.tzuchi.org tzhchi.my.salesforce-sites.com
-2.補助／理賠金額 不詳／個案評估（可涵蓋醫療費、醫療器材耗材、健保費、就醫交通等類別，金額依審核結果核定）。 tw.tzuchi.org
-3.申請期限＋基本描述 常年受理；屬急難／醫療補助，走個案審核流程，建議先由醫院社工或本人向就近慈濟社服組聯繫啟動。 tw.tzuchi.org
-4.相關連結(多筆)（開頭一定要給我https的）
-https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.com
-https://tzhchi.my.salesforce-sites.com/linewebhook/FAQ?Common=Y&sub=U91c58760985209a37b23fdf3eb5f0dd1&utm_source=chatgpt.com
-https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.com
-那麼請給我輸出格式如下
-{
-“title”: “慈濟基金會醫療補助“,
-“organization”: “佛教慈濟慈善事業基金會“,
-“category”: “社會福利“,
-“subcategory”: “慈善團體“,
-“eligibility”: “居住台灣、因病或重大事故導致經濟困難的個人／家庭；需提供基本資料與經濟狀況證明，經社工訪視評估。“,
-“amount”: “依個案評估（可涵蓋醫療費、耗材費、健保費、交通費等）。“,
-“deadline”: “常年受理“,
-“details”: “屬急難/醫療補助，經社工評估後依需求核定補助內容與金額。金額範圍無公開數據。“,
-“priority”: “medium”,
-“status”: “conditional”,
-“applicationProcess”: “可透過醫院社工或直接聯繫慈濟社服組提出申請，需提交財力及病情資料。“,
-“contactInfo”: “慈濟基金會服務專線 03-826-6779（總會）“,
-“website”: [“https://tw.tzuchi.org.tw/”,“https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.com”]
-}
-
-## 🌟 參考範例 - 慈濟基金會醫療補助
-{
-  "title": "慈濟基金會急難醫療補助",
-  "organization": "佛教慈濟慈善事業基金會",
-  "category": "慈善補助",
-  "subcategory": "慈善",
-  "eligibility": "1.低收入戶或中低收入戶 2.醫療費用超過家庭收入負擔能力 3.非健保給付之自費醫療項目 4.須經社工評估認定",
-  "amount": "依個案評估，最高補助金額視實際需求而定，通常為醫療費用的部分比例",
-  "deadline": "常年受理申請，建議於醫療費用產生後儘速申請",
-  "details": "補助範圍包含住院醫療費、手術費、藥品費等健保未給付項目。需經慈濟志工實地訪視評估，補助金額依家庭經濟狀況核定。",
-  "priority": "medium",
-  "status": "conditional",
-  "applicationProcess": "1.填寫申請表 2.檢附診斷證明書、醫療費用收據 3.提供收入證明、戶籍資料 4.等候志工家訪評估 5.基金會審核決議",
-  "contactInfo": "慈濟全台各地聯絡處，或撥打慈濟專線(02)2898-9000",
-  "websites": [
-    "https://www.tzuchi.org.tw/",
-    "https://www.tzuchi.org.tw/index.php?option=com_content&view=article&id=1234",
-    "https://forms.tzuchi.org.tw/medical-aid"
-  ]
-}
-
-## 📊 品質確認標準
-- **準確性檢查**：確認機構名稱、聯絡方式、補助範圍的準確性
-- **時效性注意**：標註可能已變更的政策或金額
-- **完整性評估**：確保申請條件、流程、所需文件資訊完整
-
-範例回應思維：
-- ✅ 好：「健保重大傷病給付」「衛生福利部」
-- ❌ 避免：「某大型醫院提供的補助」「某基金會」
-- ✅ 好：「建議洽詢戶籍地縣市政府社會局」
-- ❌ 避免：「某縣市政府提供」
-
-如果找不到相關政府資源，請回傳空陣列。`;
-
-    try {
-      const response = await this.callAPI(prompt, 'gpt-4o-mini');
-      const result = this.parseJSONResponse(response.content);
-      return this.formatNetworkResources(result.resources || [], 'government');
-    } catch (error) {
-      console.error('政府資源搜尋失敗:', error);
-      return [];
-    }
-  }
 
 
  async searchGovernmentResources(searchTerm: string, costInfo: any): Promise<any[]> {
@@ -1971,7 +1374,13 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
   ]
 }
 以下是範本，我搜尋的關鍵字為：“達文西手術”
-用戶輸入的關鍵字格式為：「 醫療行為or 治療方式 or情境（例如:80歲老人跌倒導致骨折、3歲嬰兒因為保母照顧不周導致肺部感染）」，此關鍵字用來搜尋相關台灣國內補助和補助資源（企業、政府、社會福利...等）， 透過ai的專業知識以及搜尋能力幫我找到 ，如果此醫療行為或症狀太過狹隘或資訊不足，那也請思考並幫我歸類此醫療行為，透過概括的方式去查找，我希望得到以下幾個關鍵欄位 1.申請資格（例如ＸＸ員工，台灣公民，ＹＹ成員..等） 2.補助/理賠金額 3.申請期限(例如：常年受理) 基本描述（例如：針對罹患重大疾病的台積電正職員工，提供醫療費用補助、有薪病假等福利） 4.相關連結（申請的網站為優先）
+用戶輸入的關鍵字格式為：「 醫療行為or 治療方式 or情境（例如:80歲老人跌倒導致骨折、3歲嬰兒因為保母照顧不周導致肺部感染）」，此關鍵字用來搜尋相關台灣國內補助和補助資源（企業、政府、社會福利...等）， 透過ai的專業知識以及搜尋能力幫我找到 ，
+如果此醫療行為或症狀太過狹隘或資訊不足，那也請思考並幫我歸類此醫療行為，
+透過概括的方式去查找，我希望得到以下幾個關鍵欄位 
+1.申請資格（例如ＸＸ員工，台灣公民，ＹＹ成員..等） 
+2.補助/理賠金額 
+3.申請期限(例如：常年受理) 基本描述（例如：針對罹患重大疾病的台積電正職員工，提供醫療費用補助、有薪病假等福利） 
+4.相關連結（申請的網站為優先）
 如果查找與思考後的資料為（以達文西手術為例）：
 社會福利／民間補助：慈濟基金會醫療補助（全台受理，社工評估）
 1. 申請資格 居住台灣地區、因病或重大事故導致經濟困難的個人／家庭；需提供基本資料與經濟狀況證明，經社工訪視評估。 tw.tzuchi.org tzhchi.my.salesforce-sites.com
@@ -2124,56 +1533,10 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
     }
   }
 
-  /**
-   * 第四階段：公益慈善資源搜尋
-   */
-  async searchCharityResources(searchTerm: string, costInfo: any): Promise<any[]> {
-    const prompt = `你是台灣公益慈善資源專家，請針對「${searchTerm}」搜尋台灣本地的慈善協助。
 
-⚠️ 重要提醒：請提供真實存在的台灣慈善機構名稱，避免使用「某基金會」、「某慈善機構」等通用稱呼。如果不確定具體機構名稱，請誠實說明「需進一步查詢」。
-
-## 🎯 搜尋範圍
-1. **醫療基金會**：癌症希望基金會、中華民國兒童癌症基金會、罕見疾病基金會等
-2. **宗教慈善**：佛光山慈悲基金會、天主教善牧基金會、基督教門諾基金會等
-3. **企業CSR**：台積電慈善基金會、富邦慈善基金會、長庚醫療財團法人等
-4. **國際組織**：台灣世界展望會、家扶基金會等
-5. **病友團體**：各疾病病友協會、支持團體
-
-## 📋 回傳格式
-{
-  "resources": [
-    {
-      "title": "慈善資源名稱",
-      "organization": "具體慈善機構名稱（如：癌症希望基金會、罕見疾病基金會等）",
-      "category": "公益資源",
-      "subcategory": "基金會/宗教/企業/國際",
-      "eligibility": "協助對象",
-      "amount": "協助金額或範圍",
-      "deadline": "申請期限",
-      "details": "協助內容詳情",
-      "priority": "high/medium/low",
-      "status": "eligible/conditional",
-      "applicationProcess": "申請方式",
-      "contactInfo": "聯絡方式",
-      "website": "官方網址"
-    }
-  ]
-}
-
-只提供確實存在且目前有在運作的慈善資源。`;
-
-    try {
-      const response = await this.callAPI(prompt, 'gpt-4o-mini');
-      const result = this.parseJSONResponse(response.content);
-      return this.formatNetworkResources(result.resources || [], 'charity');
-    } catch (error) {
-      console.error('慈善資源搜尋失敗:', error);
-      return [];
-    }
-  }
 
   /**
-   * 整合的醫療資源搜尋（多階段精準搜尋 + 網路爬蟲）
+   * 整合的醫療資源搜尋（簡化版）
    */
   async searchMedicalResources(searchTerm: string): Promise<{
     estimatedCost: string;
@@ -2182,7 +1545,7 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
     webResources: any[];
     costBreakdown?: any;
   }> {
-    console.log(`🔍 開始多階段精準搜尋 + 網路爬蟲: ${searchTerm}`);
+    console.log(`🔍 開始綜合醫療資源搜尋: ${searchTerm}`);
     
     try {
       // 第一階段：醫療費用精準分析
@@ -2200,60 +1563,22 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
         };
       }
 
-      // 第二階段：並行執行多個搜尋階段（傳統資源搜尋）
-      console.log('🔄 第二階段：並行搜尋各類資源');
-      const [govResources, financialResources, charityResources] = await Promise.all([
-        this.searchGovernmentResources(searchTerm, costAnalysis),
-        this.searchFinancialProducts(searchTerm, costAnalysis), 
-        this.searchCharityResources(searchTerm, costAnalysis)
-      ]);
+      // 第二階段：使用單一綜合搜尋（替代原本的三個分開搜尋）
+      console.log('🔄 第二階段：綜合資源搜尋');
+      const allResources = await this.searchComprehensiveResources(searchTerm);
 
-      // 第三階段：並行執行網路資源搜尋（使用 Promise.allSettled 處理失敗情況）
-      console.log('🌐 第三階段：並行網路資源搜尋');
-      const webSearchPromises = await Promise.allSettled([
-        this.searchWebResources(searchTerm, '政府補助'),
-        this.searchWebResources(searchTerm, '金融產品'),
-        this.searchWebResources(searchTerm, '公益慈善')
-      ]);
-
-      // 安全地提取成功的結果
-      const govWebResources = webSearchPromises[0].status === 'fulfilled' ? webSearchPromises[0].value : [];
-      const financialWebResources = webSearchPromises[1].status === 'fulfilled' ? webSearchPromises[1].value : [];
-      const charityWebResources = webSearchPromises[2].status === 'fulfilled' ? webSearchPromises[2].value : [];
-
-      // 記錄失敗的搜尋
-      webSearchPromises.forEach((result, index) => {
-        const categories = ['政府補助', '金融產品', '公益慈善'];
-        if (result.status === 'rejected') {
-          console.warn(`⚠️ ${categories[index]}網路搜尋失敗:`, result.reason);
-        }
-      });
-
-      // 整合所有資源
-      const allResources = [
-        ...govResources,
-        ...financialResources, 
-        ...charityResources
-      ];
-
-      const allWebResources = [
-        ...govWebResources,
-        ...financialWebResources,
-        ...charityWebResources
-      ];
-
-      console.log(`✅ 搜尋完成，共找到 ${allResources.length} 項傳統資源，${allWebResources.length} 項網路資源`);
+      console.log(`✅ 搜尋完成，共找到 ${allResources.length} 項資源`);
       
       return {
         estimatedCost: costAnalysis.estimatedCost,
         costSource: costAnalysis.costSource,
         resources: allResources,
-        webResources: allWebResources,
+        webResources: [],
         costBreakdown: costAnalysis.costBreakdown
       };
       
     } catch (error) {
-      console.error('❌ 多階段搜尋失敗:', error);
+      console.error('❌ 綜合搜尋失敗:', error);
       return {
         estimatedCost: '無法取得費用資訊',
         costSource: '搜尋失敗',
@@ -2262,6 +1587,72 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
       };
     }
   }
+
+  /**
+   * 綜合資源搜尋（合併原本的政府/金融/慈善搜尋）
+   */
+  async searchComprehensiveResources(searchTerm: string): Promise<any[]> {
+    const prompt = `你是台灣醫療資源專家，請針對「${searchTerm}」搜尋相關的醫療資源。
+
+## 🎯 搜尋範圍
+請同時搜尋以下三大類資源：
+
+### 1. 政府補助資源
+- 健保制度：重大傷病、健保給付、特殊治療給付
+- 中央政府：衛福部、勞動部專案補助
+- 地方政府：縣市政府社會局醫療補助
+
+### 2. 金融產品
+- 醫療貸款：銀行醫療專案貸款
+- 信用卡分期：醫療費用分期付款
+- 保險理賠：醫療險、重疾險理賠
+
+### 3. 慈善資源
+- 醫療基金會：癌症希望基金會、罕見疾病基金會等
+- 宗教慈善：慈濟、佛光山等慈善機構
+- 企業CSR：大型企業慈善基金會
+
+## 💰 費用參考
+預估醫療費用：由系統另行分析
+
+## ⚠️ 重要原則
+- 只提供真實存在的台灣機構和資源
+- 如果不確定具體名稱，使用「建議洽詢相關單位」
+- 優先提供高相關性的資源
+
+## 📋 回傳格式
+{
+  "resources": [
+    {
+      "title": "資源名稱",
+      "organization": "具體機構名稱或「建議洽詢相關單位」",
+      "category": "政府補助/金融產品/公益資源",
+      "subcategory": "具體分類",
+      "eligibility": "申請條件",
+      "amount": "補助金額或額度範圍",
+      "deadline": "申請期限",
+      "details": "詳細說明",
+      "priority": "high/medium/low",
+      "status": "eligible/conditional",
+      "applicationProcess": "申請流程",
+      "contactInfo": "聯絡方式",
+      "websites": ["相關網址"]
+    }
+  ]
+}
+
+請限制在最相關的8-10個資源，避免搜尋過多無用資源。`;
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o-mini');
+      const result = this.parseJSONResponse(response.content);
+      return this.formatNetworkResources(result.resources || []);
+    } catch (error) {
+      console.error('綜合資源搜尋失敗:', error);
+      return [];
+    }
+  }
+
 
   /**
    * 格式化網路搜尋的資源資料
@@ -2336,14 +1727,14 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
       }
     }
     
-    console.log(`✅ 綜合搜尋完成: 個人保單 ${personalPolicyResults.length} 項, 傳統資源 ${networkSearch.resources.length} 項, 網路連結 ${networkSearch.webResources?.length || 0} 項`);
+    console.log(`✅ 綜合搜尋完成: 個人保單 ${personalPolicyResults.length} 項, 傳統資源 ${networkSearch.resources.length} 項`);
     
     return {
       estimatedCost,
       costSource,
       personalPolicyResults,
       networkResources: networkSearch.resources,
-      webResources: networkSearch.webResources || [],
+      webResources: [],
       searchTerm
     };
   }
@@ -2442,7 +1833,7 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: prompt }],
-          max_tokens: 2000,
+          max_tokens: 3000,
           temperature: 0.3
         })
       });
