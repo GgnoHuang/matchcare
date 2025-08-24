@@ -87,10 +87,10 @@ function AIResourcesPage() {
         const { isLoggedIn, user } = await checkAuth()
         if (isLoggedIn && user) {
           setUser(user)
-          // 從 localStorage 讀取 OpenAI API Key
-          const storedApiKey = localStorage.getItem('openai_api_key')
-          if (storedApiKey) {
-            setApiKey(storedApiKey)
+          // 從環境變數讀取 OpenAI API Key
+          const envApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
+          if (envApiKey) {
+            setApiKey(envApiKey)
           }
         }
       } catch (error) {
@@ -124,13 +124,13 @@ function AIResourcesPage() {
   const performRealAIAnalysis = async () => {
     console.log("開始真實 AI 分析...")
     
-    // 檢查API Key（從帳號設定中讀取）
-    const storedApiKey = localStorage.getItem('openai_api_key') || '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'
+    // 檢查API Key（從環境變數讀取）
+    const storedApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
     console.log("API Key 存在:", !!storedApiKey)
     console.log("選擇的病歷檔案:", selectedMedicalFile)
     console.log("選擇的保單檔案:", selectedPolicyFile)
     if (!storedApiKey) {
-      setError("請先到帳號設定頁面設定 OpenAI API Key")
+      setError("未設定 OpenAI API Key 環境變數")
       setIsAnalyzing(false)
       return
     }
@@ -729,8 +729,8 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
     setTechniqueDetailsCache(new Map())
     
     try {
-      // 獲取OpenAI API Key
-      const storedApiKey = localStorage.getItem('openai_api_key') || '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'
+      // 獲取OpenAI API Key（從環境變數）
+      const storedApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
       const openaiService = new (await import('../../lib/openaiService')).OpenAIService(storedApiKey)
       
       // 第一階段：只進行手術技術對應分析（1次API調用）
@@ -770,8 +770,8 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
       // 獲取用戶保單資料
       const userPolicies = getUserPolicies()
       
-      // 獲取OpenAI API Key
-      const storedApiKey = localStorage.getItem('openai_api_key') || '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'
+      // 獲取OpenAI API Key（從環境變數）
+      const storedApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
       const openaiService = new (await import('../../lib/openaiService')).OpenAIService(storedApiKey)
       
       // 第二階段：詳細搜尋
@@ -1584,8 +1584,8 @@ function QuickSearchContent({
       setIsLoadingAiSuggestions(true)
       console.log(`調用AI生成醫療建議 (第${batchNumber}批): "${searchTerm}"`)
       
-      // 獲取OpenAI API Key
-      const storedApiKey = localStorage.getItem('openai_api_key')
+      // 獲取OpenAI API Key（從環境變數）
+      const storedApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
       if (!storedApiKey) {
         console.log('未找到OpenAI API Key，跳過AI建議')
         return []

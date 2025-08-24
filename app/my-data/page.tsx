@@ -338,7 +338,7 @@ export default function MyDataPage() {
       let analyzedData = null
       let analysisSucceeded = false
       try {
-        const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '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'
+        const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
         const openaiService = new OpenAIService(apiKey)
         analyzedData = await openaiService.analyzeMedicalDocument(
           fileData.text || '', 
@@ -421,7 +421,7 @@ export default function MyDataPage() {
       let analyzedData = null
       let analysisSucceeded = false
       try {
-        const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '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'
+        const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
         const openaiService = new OpenAIService(apiKey)
         // 兩階段：先摘要，再推理
         const summary = await openaiService.summarizeInsurancePolicy(

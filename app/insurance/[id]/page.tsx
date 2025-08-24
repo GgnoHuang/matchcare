@@ -327,7 +327,7 @@ ${fullPolicyData}
     console.log('🧪 Prompt 片段預覽:', analysisPrompt.substring(0, 300))
 
     try {
-      const apiKey = localStorage.getItem('openai_api_key') || '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'
+      const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
 
       // 實例化OpenAI服務
       const aiService = new OpenAIService(apiKey)
