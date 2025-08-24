@@ -18,6 +18,7 @@ export default function MedicalRecordsPage() {
   const [medicalRecords, setMedicalRecords] = useState<any[]>([])
   const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingRecords, setIsLoadingRecords] = useState(false)
   const isMobile = useMediaQuery("(max-width: 768px)")
 
   // 檢查用戶登入狀態
@@ -50,6 +51,7 @@ export default function MedicalRecordsPage() {
   const loadUserMedicalRecords = async () => {
     if (!user?.phoneNumber) return
     
+    setIsLoadingRecords(true)
     try {
       console.log('載入用戶病歷資料，用戶電話:', user.phoneNumber)
       
@@ -120,6 +122,8 @@ export default function MedicalRecordsPage() {
     } catch (error) {
       console.error('載入病歷資料失敗:', error)
       setMedicalRecords([])
+    } finally {
+      setIsLoadingRecords(false)
     }
   }
 
@@ -516,6 +520,16 @@ export default function MedicalRecordsPage() {
                 )}
               </Card>
               ))
+            ) : isLoadingRecords ? (
+              <Card>
+                <CardContent className="py-8 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
+                  <h3 className="text-lg font-medium mb-2">載入病歷資料中...</h3>
+                  <p className="text-gray-500">
+                    正在從資料庫取得您的病歷記錄，請稍候...
+                  </p>
+                </CardContent>
+              </Card>
             ) : (
               <Card>
                 <CardContent className="py-8 text-center">

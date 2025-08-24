@@ -33,6 +33,7 @@ export default function InsuranceImportPage() {
   const [pdfText, setPdfText] = useState<string>('')
   const [isTestingStage1, setIsTestingStage1] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   
   // 批次上傳狀態
   const [allAnalysisResults, setAllAnalysisResults] = useState<any[]>([])
@@ -83,7 +84,8 @@ export default function InsuranceImportPage() {
 
     setIsTestingStage1(true)
     try {
-      const openaiService = new OpenAIService()
+      const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
+      const openaiService = new OpenAIService(apiKey)
       console.log('🧪 獨立測試第一階段 prompt...')
       console.log('🧪 使用的PDF文字長度:', pdfText.length)
       const testResult = await openaiService.testPromptStage(pdfText)
@@ -106,7 +108,8 @@ export default function InsuranceImportPage() {
     try {
       console.log('開始分析保單文件:', fileData.filename)
       
-      const openaiService = new OpenAIService()
+      const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
+      const openaiService = new OpenAIService(apiKey)
       console.log('開始 AI 分析（三階段）...')
       
       // 第一階段：簡單測試 prompt
@@ -287,6 +290,7 @@ export default function InsuranceImportPage() {
       return
     }
     
+    setIsSaving(true)
     try {
       // 批次儲存所有保單記錄到 Supabase
       for (let i = 0; i < allAnalysisResults.length; i++) {
@@ -297,6 +301,8 @@ export default function InsuranceImportPage() {
       console.error('Error saving insurance policies:', error)
       const errorMessage = error instanceof Error ? error.message : '保存失敗，請稍後再試'
       setError(errorMessage)
+    } finally {
+      setIsSaving(false)
     }
   }
   
@@ -630,8 +636,19 @@ export default function InsuranceImportPage() {
                     取消
                   </Button>
                   {allAnalysisResults.length > 0 && (
-                    <Button onClick={handleAutoNext} className="bg-teal-600 hover:bg-teal-700">
-                      儲存 ({allAnalysisResults.length}筆保單)
+                    <Button 
+                      onClick={handleAutoNext} 
+                      disabled={isSaving}
+                      className="bg-teal-600 hover:bg-teal-700"
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          儲存中...
+                        </>
+                      ) : (
+                        `儲存 (${allAnalysisResults.length}筆保單)`
+                      )}
                     </Button>
                   )}
                 </div>

@@ -55,6 +55,7 @@ export default function MedicalRecordsImportPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string, email: string } | null>(null)
@@ -102,7 +103,8 @@ export default function MedicalRecordsImportPage() {
       setIsUploading(false)
       setIsProcessing(true)
 
-      const openaiService = new OpenAIService()
+      const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
+      const openaiService = new OpenAIService(apiKey)
       console.log('開始 AI 分析...')
       const result = await openaiService.analyzeMedicalDocument(
         fileData.text || '', 
@@ -141,6 +143,7 @@ export default function MedicalRecordsImportPage() {
       return
     }
     
+    setIsSaving(true)
     try {
       // 批次儲存所有記錄到 Supabase
       for (let i = 0; i < allExtractedData.length; i++) {
@@ -151,6 +154,8 @@ export default function MedicalRecordsImportPage() {
       console.error('Error saving medical records:', error)
       const errorMessage = error instanceof Error ? error.message : '保存失敗，請稍後再試'
       setError(errorMessage)
+    } finally {
+      setIsSaving(false)
     }
   }
   
@@ -546,8 +551,19 @@ export default function MedicalRecordsImportPage() {
                     取消
                   </Button>
                   {allExtractedData.length > 0 && (
-                    <Button onClick={handleNext} className="bg-teal-600 hover:bg-teal-700">
-                      儲存 ({allExtractedData.length}筆記錄)
+                    <Button 
+                      onClick={handleNext} 
+                      disabled={isSaving}
+                      className="bg-teal-600 hover:bg-teal-700"
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          儲存中...
+                        </>
+                      ) : (
+                        `儲存 (${allExtractedData.length}筆記錄)`
+                      )}
                     </Button>
                   )}
                 </div>

@@ -44,6 +44,7 @@ export default function InsurancePage() {
   const [insurancePolicies, setInsurancePolicies] = useState<InsurancePolicy[]>([])
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingPolicies, setIsLoadingPolicies] = useState(false)
   const [medicalRecords, setMedicalRecords] = useState([])
 
   // 檢查用戶登入狀態
@@ -80,6 +81,7 @@ export default function InsurancePage() {
   const loadUserData = async () => {
     if (!user?.phoneNumber) return
     
+    setIsLoadingPolicies(true)
     try {
       console.log('載入用戶保單資料，電話號碼:', user.phoneNumber)
       
@@ -161,8 +163,15 @@ export default function InsurancePage() {
           const maxClaimUnit = top?.unit ?? '元'
 
           
+          const finalId = policy.id || `policy_${index + 1}`;
+          console.log(`保單 ${index + 1} ID 生成:`, {
+            originalId: policy.id,
+            finalId: finalId,
+            fileName: policy.fileName
+          });
+          
           return {
-            id: policy.id || `policy_${index + 1}`,
+            id: finalId,
             company: company,
             name: policyName,
             type: policyType,
@@ -195,6 +204,8 @@ export default function InsurancePage() {
     } catch (error) {
       console.error('載入保單資料失敗:', error)
       setInsurancePolicies([])
+    } finally {
+      setIsLoadingPolicies(false)
     }
   }
 
@@ -378,7 +389,17 @@ export default function InsurancePage() {
           </TabsList>
         </div>
         <TabsContent value="all" className="space-y-4">
-          {insurancePolicies.length > 0 ? insurancePolicies.map((policy) => (
+          {isLoadingPolicies ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
+                <h3 className="text-lg font-medium mb-2">載入保單資料中...</h3>
+                <p className="text-gray-500">
+                  正在從資料庫取得您的保單資料，請稍候...
+                </p>
+              </CardContent>
+            </Card>
+          ) : insurancePolicies.length > 0 ? insurancePolicies.map((policy) => (
             <Card key={policy.id} className="overflow-hidden">
               <CardHeader className="pb-2">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
@@ -400,8 +421,6 @@ export default function InsurancePage() {
                   </div>
                   <Link
                     href={`/insurance/${policy.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className="w-full sm:w-auto"
                   >
                     <Button
@@ -487,7 +506,17 @@ export default function InsurancePage() {
           )}
         </TabsContent>
         <TabsContent value="medical" className="space-y-4">
-          {insurancePolicies.filter((p) => p.type === "醫療險").length > 0 ? 
+          {isLoadingPolicies ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
+                <h3 className="text-lg font-medium mb-2">載入醫療險資料中...</h3>
+                <p className="text-gray-500">
+                  正在從資料庫取得您的醫療險保單，請稍候...
+                </p>
+              </CardContent>
+            </Card>
+          ) : insurancePolicies.filter((p) => p.type === "醫療險").length > 0 ? 
             insurancePolicies
               .filter((p) => p.type === "醫療險")
               .map((policy) => (
@@ -512,8 +541,6 @@ export default function InsurancePage() {
                     </div>
                     <Link
                       href={`/insurance/${policy.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="w-full sm:w-auto"
                     >
                       <Button
@@ -597,7 +624,17 @@ export default function InsurancePage() {
             )}
         </TabsContent>
         <TabsContent value="critical" className="space-y-4">
-          {insurancePolicies.filter((p) => p.type === "重疾險").length > 0 ? 
+          {isLoadingPolicies ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
+                <h3 className="text-lg font-medium mb-2">載入重疾險資料中...</h3>
+                <p className="text-gray-500">
+                  正在從資料庫取得您的重疾險保單，請稍候...
+                </p>
+              </CardContent>
+            </Card>
+          ) : insurancePolicies.filter((p) => p.type === "重疾險").length > 0 ? 
             insurancePolicies
               .filter((p) => p.type === "重疾險")
               .map((policy) => (
@@ -622,8 +659,6 @@ export default function InsurancePage() {
                     </div>
                     <Link
                       href={`/insurance/${policy.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="w-full sm:w-auto"
                     >
                       <Button
@@ -708,7 +743,17 @@ export default function InsurancePage() {
             )}
         </TabsContent>
         <TabsContent value="accident" className="space-y-4">
-          {insurancePolicies.filter((p) => p.type === "意外險").length > 0 ? 
+          {isLoadingPolicies ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
+                <h3 className="text-lg font-medium mb-2">載入意外險資料中...</h3>
+                <p className="text-gray-500">
+                  正在從資料庫取得您的意外險保單，請稍候...
+                </p>
+              </CardContent>
+            </Card>
+          ) : insurancePolicies.filter((p) => p.type === "意外險").length > 0 ? 
             insurancePolicies
               .filter((p) => p.type === "意外險")
               .map((policy) => (
@@ -733,8 +778,6 @@ export default function InsurancePage() {
                     </div>
                     <Link
                       href={`/insurance/${policy.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="w-full sm:w-auto"
                     >
                       <Button

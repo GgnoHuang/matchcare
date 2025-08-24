@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,10 @@ interface CoverageItem {
   unit: string
 }
 
-export default function EditInsurancePage({ params }: { params: { id: string } }) {
+export default function EditInsurancePage({ params }: { params: Promise<{ id: string }> }) {
+  // Unwrap params Promise outside of try/catch
+  const resolvedParams = use(params)
+  
   const router = useRouter()
   const [policy, setPolicy] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -62,7 +65,7 @@ export default function EditInsurancePage({ params }: { params: { id: string } }
         
         // 載入保單資料
         if (currentUser?.phoneNumber) {
-          await loadPolicyData(currentUser.phoneNumber, params.id)
+          await loadPolicyData(currentUser.phoneNumber, resolvedParams.id)
         }
         
       } catch (error) {
@@ -74,7 +77,7 @@ export default function EditInsurancePage({ params }: { params: { id: string } }
     }
     
     initializePage()
-  }, [params.id])
+  }, [resolvedParams.id])
 
   const loadPolicyData = async (phoneNumber: string, policyId: string) => {
     try {
@@ -192,8 +195,8 @@ export default function EditInsurancePage({ params }: { params: { id: string } }
 
     if (confirm("確定要刪除此保單嗎？此操作無法復原。")) {
       try {
-        await userDataService.deleteInsurancePolicy(user.id, params.id)
-        console.log("刪除保單:", params.id)
+        await userDataService.deleteInsurancePolicy(user.id, resolvedParams.id)
+        console.log("刪除保單:", resolvedParams.id)
         router.push("/insurance")
       } catch (error) {
         console.error('刪除失敗:', error)

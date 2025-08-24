@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -103,13 +103,16 @@ const calculateAverageStars = (evaluation: PolicyEvaluation): string => {
   return averageStars.toFixed(1);
 }
 
-export default function InsurancePolicyDetailPage({ params }: { params: { id: string } }) {
+export default function InsurancePolicyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // Unwrap params Promise outside of try/catch
+  const resolvedParams = use(params)
+  
   const [policy, setPolicy] = useState<any>(null)
   const [evaluation, setEvaluation] = useState<PolicyEvaluation | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [activeTab, setActiveTab] = useState("analysis")
-  const [user, setUser] = useState<{ id: string, name: string } | null>(null)
+  const [user, setUser] = useState<{ id: string, name: string, phoneNumber: string, username: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -119,15 +122,18 @@ export default function InsurancePolicyDetailPage({ params }: { params: { id: st
         
         // 檢查用戶登入狀態
         const { isLoggedIn, user: authUser } = await checkAuth()
+        console.log('checkAuth 結果:', { isLoggedIn, authUser })
+        
         if (!isLoggedIn || !authUser) {
           setError('請先登入以查看保單詳情')
           return
         }
         
+        console.log('設置用戶資料:', authUser)
         setUser(authUser)
         
         // 載入真實保單資料
-        await loadPolicyData(authUser.id, params.id)
+        await loadPolicyData(authUser, resolvedParams.id)
         
       } catch (error) {
         console.error('初始化頁面失敗:', error)
@@ -138,15 +144,48 @@ export default function InsurancePolicyDetailPage({ params }: { params: { id: st
     }
     
     initializePage()
-  }, [params.id])
+  }, [resolvedParams.id])
 
-  const loadPolicyData = async (userId: string, policyId: string) => {
+  const loadPolicyData = async (authUser: any, policyId: string) => {
     try {
-      // 從localStorage讀取用戶保單
-      const policies = await userDataService.getInsurancePolicies(userId)
-      const foundPolicy = policies.find(p => p.id === policyId)
+      // 從 Supabase 讀取用戶保單（與保單總覽頁面保持一致）
+      console.log('AI精靈頁面用戶資料:', authUser)
+      console.log('使用的電話號碼:', authUser?.phoneNumber)
+      
+      if (!authUser?.phoneNumber) {
+        console.error('用戶資料結構:', authUser)
+        setError('無法獲取用戶電話號碼，請重新登入')
+        return
+      }
+      
+      const { getUserPolicies } = await import('../../../lib/supabaseDataService')
+      const result = await getUserPolicies(authUser.phoneNumber)
+      
+      console.log('Supabase getUserPolicies 結果:', result)
+      
+      if (!result.success) {
+        setError(`載入保單失敗: ${result.error}`)
+        return
+      }
+      
+      // 添加調試資訊
+      console.log('從 Supabase 載入的保單列表:', result.policies)
+      console.log('可用的保單 IDs:', result.policies.map((p: any) => p.id))
+      console.log('正在尋找的 policy ID:', policyId)
+      
+      const foundPolicy = result.policies.find((p: any) => p.id === policyId)
       
       if (!foundPolicy) {
+        // 嘗試使用後備 ID 格式
+        const backupPolicy = result.policies.find((p: any, index: number) => `policy_${index + 1}` === policyId)
+        if (backupPolicy) {
+          console.log('使用後備 ID 找到保單:', backupPolicy)
+          setPolicy(backupPolicy)
+          await performAIAnalysis(backupPolicy, authUser)
+          return
+        }
+        
+        console.log('找不到匹配的保單，嘗試的 ID:', policyId)
         setError('找不到指定的保單')
         return
       }
@@ -155,7 +194,7 @@ export default function InsurancePolicyDetailPage({ params }: { params: { id: st
       console.log('載入的保單資料:', foundPolicy)
       
       // 開始AI分析
-      await performAIAnalysis(foundPolicy, userId)
+      await performAIAnalysis(foundPolicy, authUser)
       
     } catch (error) {
       console.error('載入保單資料失敗:', error)
@@ -163,15 +202,25 @@ export default function InsurancePolicyDetailPage({ params }: { params: { id: st
     }
   }
 
-  const performAIAnalysis = async (policyData: any, userId: string) => {
+  const performAIAnalysis = async (policyData: any, authUser: any) => {
     try {
       setIsAnalyzing(true)
       
-      // 獲取用戶的其他保單和病歷資料以進行全面分析
-      const [allPolicies, medicalRecords] = await Promise.all([
-        userDataService.getInsurancePolicies(userId),
-        userDataService.getMedicalRecords(userId)
-      ])
+      // 獲取用戶的其他保單和病歷資料以進行全面分析（從 Supabase）
+      console.log('AI分析中的用戶資料:', authUser)
+      if (!authUser?.phoneNumber) {
+        console.error('AI分析時缺少用戶電話號碼')
+        setError('無法進行 AI 分析：缺少用戶資料')
+        return
+      }
+      
+      const { getUserPolicies } = await import('../../../lib/supabaseDataService')
+      const allPoliciesResult = await getUserPolicies(authUser.phoneNumber)
+      console.log('AI分析獲取的所有保單:', allPoliciesResult)
+      const allPolicies = allPoliciesResult.success ? allPoliciesResult.policies : []
+      
+      // 病歷資料暫時使用空陣列，因為可能還沒有對應的 Supabase 函數
+      const medicalRecords: any[] = []
       
       // 調用AI進行20分制評分分析
       const analysisResult = await analyzePolicy(policyData, allPolicies, medicalRecords)
@@ -671,9 +720,13 @@ ${fullPolicyData}
                                 <p className="text-sm font-medium">{item.name}</p>
                                 <p className="text-xs text-gray-500 mt-1">{item.reason}</p>
                               </div>
-                              <Badge variant={item.score >= 0.8 ? "default" : item.score >= 0.5 ? "secondary" : "outline"}>
-                                {item.score}
-                              </Badge>
+                              {item.score >= 0.5 && (
+                                <Badge 
+                                  variant={item.score >= 0.8 ? "default" : "secondary"}
+                                >
+                                  {item.score >= 0.8 ? "優秀" : "良好"}
+                                </Badge>
+                              )}
                             </div>
                           ))}
                         </div>

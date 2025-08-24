@@ -102,7 +102,8 @@ export function MainNav() {
     { href: "/", label: "首頁" },
     { href: "/insurance", label: "保單總覽" },
     { href: "/medical-records", label: "病歷管理" },
-    { href: "/resources", label: "其他福利資源" },
+    // TODO: 暫時隱藏其他福利資源功能 - 可在需要時恢復顯示
+    // { href: "/resources", label: "其他福利資源" },
   ]
 
   return (
