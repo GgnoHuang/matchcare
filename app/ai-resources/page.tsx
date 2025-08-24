@@ -73,6 +73,12 @@ function AIResourcesPage() {
   const [quickSearchTerm, setQuickSearchTerm] = useState("")
   const [quickSearchResults, setQuickSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
+  
+  // 手術技術對應搜尋狀態
+  const [surgicalTechResult, setSurgicalTechResult] = useState(null)
+  const [expandedTechniques, setExpandedTechniques] = useState(new Set())
+  const [techniqueDetailsCache, setTechniqueDetailsCache] = useState(new Map())
+  const [loadingTechniques, setLoadingTechniques] = useState(new Set())
 
   // 檢查用戶登入狀態並載入API Key
   useEffect(() => {
@@ -687,6 +693,127 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
 
   const resourceStats = getResourceStats()
 
+  // 手術技術對應搜尋功能
+  // 從localStorage獲取用戶保單資料
+  const getUserPolicies = () => {
+    try {
+      if (!user?.id) {
+        console.log('❌ 快速搜尋 - 用戶未登入，無法讀取保單資料')
+        return []
+      }
+      
+      const storageKey = `matchcare_${user.id}_insurance_policies`
+      const policies = localStorage.getItem(storageKey)
+      const parsedPolicies = policies ? JSON.parse(policies) : []
+      
+      console.log(`🔍 快速搜尋 - 讀取用戶保單資料 (${parsedPolicies.length} 筆)`)
+      return parsedPolicies
+    } catch (error) {
+      console.error('讀取保單資料失敗:', error)
+      return []
+    }
+  }
+
+  // 第一階段：手術技術對應搜尋
+  const executeSurgicalTechSearch = async (searchTerm: string) => {
+    console.log(`🏥 執行手術技術對應搜尋: "${searchTerm}"`)
+
+    if (!searchTerm.trim()) {
+      setIsSearching(false)
+      return
+    }
+
+    setIsSearching(true)
+    setSurgicalTechResult(null)
+    setExpandedTechniques(new Set())
+    setTechniqueDetailsCache(new Map())
+    
+    try {
+      // 獲取OpenAI API Key
+      const storedApiKey = localStorage.getItem('openai_api_key') || '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'
+      const openaiService = new (await import('../../lib/openaiService')).OpenAIService(storedApiKey)
+      
+      // 第一階段：只進行手術技術對應分析（1次API調用）
+      const result = await openaiService.quickSearchSurgicalTech(searchTerm)
+      
+      console.log('手術技術對應結果:', result)
+      setSurgicalTechResult(result)
+      
+    } catch (error: any) {
+      console.error('手術技術搜尋失敗:', error)
+      
+      // 如果是API Key問題，給出更明確的指引
+      if (error.message?.includes('API 金鑰')) {
+        alert('請先到「設定」頁面輸入您的 OpenAI API 金鑰才能使用搜尋功能')
+      }
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // 第二階段：詳細技術搜尋（當用戶點擊特定技術時）
+  const executeTechniqueDetailSearch = async (techniqueId: string, techniqueName: string) => {
+    console.log(`🔍 執行詳細技術搜尋: ${techniqueName} (${techniqueId})`)
+    
+    // 檢查緩存
+    if (techniqueDetailsCache.has(techniqueId)) {
+      console.log('使用緩存的詳細搜尋結果')
+      return
+    }
+
+    // 設置loading狀態
+    const newLoadingTechniques = new Set(loadingTechniques)
+    newLoadingTechniques.add(techniqueId)
+    setLoadingTechniques(newLoadingTechniques)
+
+    try {
+      // 獲取用戶保單資料
+      const userPolicies = getUserPolicies()
+      
+      // 獲取OpenAI API Key
+      const storedApiKey = localStorage.getItem('openai_api_key') || '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'
+      const openaiService = new (await import('../../lib/openaiService')).OpenAIService(storedApiKey)
+      
+      // 第二階段：詳細搜尋
+      const result = await openaiService.searchTechniqueDetails(
+        surgicalTechResult?.searchTerm || '', 
+        techniqueName, 
+        userPolicies
+      )
+      
+      console.log('詳細技術搜尋結果:', result)
+      
+      // 更新緩存
+      const newCache = new Map(techniqueDetailsCache)
+      newCache.set(techniqueId, result)
+      setTechniqueDetailsCache(newCache)
+      
+    } catch (error: any) {
+      console.error('詳細技術搜尋失敗:', error)
+    } finally {
+      // 移除loading狀態
+      const finalLoadingTechniques = new Set(loadingTechniques)
+      finalLoadingTechniques.delete(techniqueId)
+      setLoadingTechniques(finalLoadingTechniques)
+    }
+  }
+
+  // 處理技術項目的展開/收起
+  const toggleTechniqueExpansion = async (techniqueId: string, techniqueName: string) => {
+    const newExpanded = new Set(expandedTechniques)
+    
+    if (expandedTechniques.has(techniqueId)) {
+      // 收起
+      newExpanded.delete(techniqueId)
+      setExpandedTechniques(newExpanded)
+    } else {
+      // 展開並觸發詳細搜尋
+      newExpanded.add(techniqueId)
+      setExpandedTechniques(newExpanded) // 先設置展開狀態，讓loading進度條能顯示
+      await executeTechniqueDetailSearch(techniqueId, techniqueName)
+    }
+  }
+
   return (
     <div className="container py-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
@@ -717,6 +844,14 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
             isSearching={isSearching}
             setIsSearching={setIsSearching}
             user={user}
+            surgicalTechResult={surgicalTechResult}
+            expandedTechniques={expandedTechniques}
+            techniqueDetailsCache={techniqueDetailsCache}
+            loadingTechniques={loadingTechniques}
+            executeSurgicalTechSearch={executeSurgicalTechSearch}
+            executeTechniqueDetailSearch={executeTechniqueDetailSearch}
+            toggleTechniqueExpansion={toggleTechniqueExpansion}
+            getUserPolicies={getUserPolicies}
           />
         </TabsContent>
 
@@ -1189,6 +1324,142 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
   )
 }
 
+// 動態進度條組件
+function ProgressBar() {
+  const [progress, setProgress] = useState(20)
+  
+  useEffect(() => {
+    // 生成隨機時間偏移和百分比偏移，讓每次都不太一樣
+    const getRandomOffset = (base: number, variance: number) => 
+      base + (Math.random() - 0.5) * variance
+    
+    const timeoutIds = [
+      // 小幅增長1：0.5-0.8秒，增加1-3%
+      setTimeout(() => {
+        setProgress(prev => prev + Math.round(getRandomOffset(2, 2)))
+      }, getRandomOffset(650, 300)),
+      
+      // 小幅增長2：0.9-1.1秒，增加1-2%
+      setTimeout(() => {
+        setProgress(prev => prev + Math.round(getRandomOffset(1.5, 1)))
+      }, getRandomOffset(1000, 200)),
+      
+      // 主要階段1：1.2-1.8秒，到達45%附近
+      setTimeout(() => {
+        const newProgress = Math.round(getRandomOffset(45, 6))
+        setProgress(Math.min(newProgress, 50))
+      }, getRandomOffset(1500, 600)),
+      
+      // 小幅增長3：1.9-2.1秒，增加1-2%
+      setTimeout(() => {
+        setProgress(prev => prev + Math.round(getRandomOffset(1.5, 1)))
+      }, getRandomOffset(2000, 200)),
+      
+      // 主要階段2：2.2-2.8秒，到達50%附近
+      setTimeout(() => {
+        const newProgress = Math.round(getRandomOffset(50, 8))
+        setProgress(Math.min(newProgress, 55))
+      }, getRandomOffset(2500, 600)),
+      
+      // 小幅增長4：3.0-3.2秒，增加1-3%
+      setTimeout(() => {
+        setProgress(prev => prev + Math.round(getRandomOffset(2, 2)))
+      }, getRandomOffset(3100, 200)),
+      
+      // 主要階段3：3.3-4.0秒，到達75%附近
+      setTimeout(() => {
+        const newProgress = Math.round(getRandomOffset(75, 16))
+        setProgress(Math.min(newProgress, 85))
+      }, getRandomOffset(3650, 700)),
+      
+      // 小幅增長5：4.1-4.3秒，增加1-2%
+      setTimeout(() => {
+        setProgress(prev => prev + Math.round(getRandomOffset(1.5, 1)))
+      }, getRandomOffset(4200, 200)),
+      
+      // 小幅增長6：4.5-4.7秒，增加1-2%
+      setTimeout(() => {
+        setProgress(prev => prev + Math.round(getRandomOffset(1.5, 1)))
+      }, getRandomOffset(4600, 200)),
+      
+      // 主要階段4：4.8-5.5秒，最終到達88-95%
+      setTimeout(() => {
+        const finalProgress = Math.round(getRandomOffset(91, 8))
+        setProgress(Math.min(finalProgress, 95))
+      }, getRandomOffset(5150, 700))
+    ]
+    
+    // 清理function
+    return () => {
+      timeoutIds.forEach(id => clearTimeout(id))
+    }
+  }, [])
+  
+  return (
+    <div className="w-full bg-blue-200 rounded-full h-2">
+      <div 
+        className="bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
+        style={{width: `${progress}%`}}
+      ></div>
+    </div>
+  )
+}
+
+// 醫療術語自動完成資料庫 - 靜態詞庫（保留原有功能，響應速度快）
+const MEDICAL_TERMS = [
+  // 手術技術類
+  '達文西手術', '腹腔鏡手術', '內視鏡手術', '微創手術', '機械手臂手術',
+  '關節鏡手術', '胸腔鏡手術', '腦部手術', '心臟手術', '肝臟手術',
+  '胃部手術', '腸道手術', '膽囊手術', '甲狀腺手術', '脊椎手術',
+  '白內障手術', '近視雷射手術', '植牙手術', '美容手術', '整形手術',
+  
+  // 疾病診斷類
+  '癌症', '腫瘤', '心臟病', '高血壓', '糖尿病', '中風', '失智症',
+  '帕金森氏症', '憂鬱症', '焦慮症', '骨折', '關節炎', '椎間盤突出',
+  '白血病', '淋巴癌', '乳癌', '肺癌', '肝癌', '大腸癌', '胃癌',
+  '攝護腺癌', '子宮頸癌', '卵巢癌', '腦瘤', '皮膚癌',
+  
+  // 治療方法類
+  '化療', '放療', '標靶治療', '免疫治療', '荷爾蒙治療',
+  '復健治療', '物理治療', '職能治療', '語言治療', '心理治療',
+  '針灸', '中醫', '西醫', '健檢', '預防醫學',
+  
+  // 醫療設備類
+  'MRI', 'CT', 'X光', '超音波', '心電圖', '腦電圖', '骨密度檢查',
+  '胃鏡', '大腸鏡', '支氣管鏡', '膀胱鏡', '關節鏡',
+  
+  // 專科類別
+  '心臟科', '腦神經科', '骨科', '婦產科', '小兒科', '皮膚科',
+  '眼科', '耳鼻喉科', '牙科', '精神科', '復健科', '泌尿科',
+  '腸胃科', '胸腔科', '腎臟科', '內分泌科', '風濕免疫科'
+]
+
+/**
+ * AI動態建議功能說明（目前實驗性功能）:
+ * 
+ * 優點：
+ * - 可以產生更精準的醫療術語建議
+ * - 能識別專業醫學詞彙和縮寫
+ * - 可以處理複雜的醫療情境描述
+ * 
+ * 潛在問題：
+ * - API調用延遲（通常200-500ms）
+ * - 可能產生非醫療相關詞彙
+ * - 消耗OpenAI API quota
+ * - 需要網路連線
+ * 
+ * 實現策略：
+ * 1. 混合模式：優先使用靜態詞庫（快速響應）
+ * 2. 當靜態詞庫匹配數量不足時，呼叫AI補充
+ * 3. 嚴格限制AI只回傳醫療領域術語
+ * 4. 緩存AI結果避免重複API調用
+ * 
+ * 未來編輯注意事項：
+ * - 如果API成本過高，可以停用AI功能，保留靜態詞庫
+ * - 可以調整AI_SUGGESTION_THRESHOLD來控制AI調用頻率
+ * - AI建議緩存在aiSuggestionsCache中，可考慮持久化到localStorage
+ */
+
 // 快速搜尋內容組件
 function QuickSearchContent({
   quickSearchTerm,
@@ -1198,145 +1469,157 @@ function QuickSearchContent({
   isSearching,
   setIsSearching,
   user,
+  surgicalTechResult,
+  expandedTechniques,
+  techniqueDetailsCache,
+  loadingTechniques,
+  executeSurgicalTechSearch,
+  executeTechniqueDetailSearch,
+  toggleTechniqueExpansion,
+  getUserPolicies,
 }) {
   // 使用useRef來跟踪當前的搜尋詞，避免閉包問題
   const currentSearchTermRef = useRef(quickSearchTerm)
   const [searchResult, setSearchResult] = useState(null)
+  
+  // Autocomplete 相關狀態
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
+  
+  // AI 建議相關狀態
+  const [aiSuggestionsCache, setAiSuggestionsCache] = useState<Map<string, string[]>>(new Map())
+  const [isLoadingAiSuggestions, setIsLoadingAiSuggestions] = useState(false)
+  
+  // 配置參數
+  const AI_SUGGESTION_THRESHOLD = 3 // 當靜態詞庫匹配少於3個時，調用AI
+  const ENABLE_AI_SUGGESTIONS = true // 暫時停用AI功能（避免API調用複雜度），可設為true來啟用
 
-  // 當搜尋詞變化時更新ref
+  // 當搜尋詞變化時更新ref和suggestions（混合模式）
   useEffect(() => {
     currentSearchTermRef.current = quickSearchTerm
-  }, [quickSearchTerm])
+    
+    const updateSuggestions = async () => {
+      if (quickSearchTerm.trim().length === 0) {
+        setSuggestions([])
+        setShowSuggestions(false)
+        setSelectedSuggestionIndex(-1)
+        return
+      }
 
-  // 從localStorage獲取用戶保單資料
-  const getUserPolicies = () => {
+      // 第一步：從靜態詞庫獲取匹配項
+      const staticSuggestions = MEDICAL_TERMS.filter(term => 
+        term.toLowerCase().includes(quickSearchTerm.toLowerCase())
+      ).slice(0, 8)
+      
+      // 立即顯示靜態建議（快速響應）
+      setSuggestions(staticSuggestions)
+      setShowSuggestions(staticSuggestions.length > 0)
+      setSelectedSuggestionIndex(-1)
+      
+      // 第二步：如果靜態建議不足且啟用AI，嘗試AI補充
+      if (ENABLE_AI_SUGGESTIONS && 
+          staticSuggestions.length < AI_SUGGESTION_THRESHOLD && 
+          quickSearchTerm.trim().length >= 1) { // 至少輸入1個字才調用AI
+        
+        try {
+          // 先獲取第一批AI建議
+          const firstBatchSuggestions = await generateAIMedicalSuggestions(quickSearchTerm, staticSuggestions)
+          
+          if (firstBatchSuggestions.length > 0) {
+            // 合併靜態和AI建議，去重
+            const combinedSuggestions = [
+              ...staticSuggestions,
+              ...firstBatchSuggestions.filter(ai => !staticSuggestions.includes(ai))
+            ].slice(0, 10) // 先顯示10個（靜態+第一批AI）
+            
+            setSuggestions(combinedSuggestions)
+            setShowSuggestions(combinedSuggestions.length > 0)
+            console.log(`混合建議結果: 靜態${staticSuggestions.length}個 + AI第一批${firstBatchSuggestions.length}個`)
+            
+            // 延遲1秒後獲取第二批建議
+            setTimeout(async () => {
+              try {
+                const secondBatchSuggestions = await generateAIMedicalSuggestions(quickSearchTerm, combinedSuggestions)
+                
+                if (secondBatchSuggestions.length > 0) {
+                  const finalSuggestions = [
+                    ...combinedSuggestions,
+                    ...secondBatchSuggestions.filter(ai => !combinedSuggestions.includes(ai))
+                  ].slice(0, 15) // 最終限制15個
+                  
+                  setSuggestions(finalSuggestions)
+                  console.log(`完整建議結果: 總共${finalSuggestions.length}個 (包含第二批${secondBatchSuggestions.length}個)`)
+                }
+              } catch (error) {
+                console.warn('第二批AI建議獲取失敗:', error)
+              }
+            }, 1000)
+          }
+        } catch (error) {
+          console.warn('AI建議補充失敗，保留靜態建議:', error)
+          // 保留原有的靜態建議
+        }
+      }
+    }
+    
+    updateSuggestions()
+  }, [quickSearchTerm, aiSuggestionsCache]) // 加入aiSuggestionsCache依賴
+
+  // 使用傳入的getUserPolicies函數
+
+  // AI動態生成醫療術語建議（支持分批加載）
+  const generateAIMedicalSuggestions = async (searchTerm: string, currentSuggestions: string[]): Promise<string[]> => {
+    if (!ENABLE_AI_SUGGESTIONS || !searchTerm.trim()) return []
+    
+    // 檢查緩存（為分批加載創建不同的key）
+    const batchNumber = Math.floor(currentSuggestions.length / 5) + 1
+    const cacheKey = `${searchTerm.toLowerCase().trim()}-batch-${batchNumber}`
+    if (aiSuggestionsCache.has(cacheKey)) {
+      console.log(`使用AI建議緩存: "${searchTerm}" 第${batchNumber}批`)
+      return aiSuggestionsCache.get(cacheKey) || []
+    }
+    
     try {
-      if (!user?.id) {
-        console.log('❌ 快速搜尋 - 用戶未登入，無法讀取保單資料')
+      setIsLoadingAiSuggestions(true)
+      console.log(`調用AI生成醫療建議 (第${batchNumber}批): "${searchTerm}"`)
+      
+      // 獲取OpenAI API Key
+      const storedApiKey = localStorage.getItem('openai_api_key')
+      if (!storedApiKey) {
+        console.log('未找到OpenAI API Key，跳過AI建議')
         return []
       }
       
-      const storageKey = `matchcare_${user.id}_insurance_policies`
-      const policies = localStorage.getItem(storageKey)
-      const parsedPolicies = policies ? JSON.parse(policies) : []
-      
-      console.log(`🔍 快速搜尋 - 讀取用戶保單資料`)
-      console.log(`   📂 儲存Key: ${storageKey}`)
-      console.log(`   📊 保單數量: ${parsedPolicies.length} 筆`)
-      console.log(`   📋 原始資料:`, policies ? policies.substring(0, 200) + '...' : 'null')
-      console.log(`   📄 解析後的保單資料:`, parsedPolicies)
-      
-      // 檢查每個保單的文本內容
-      parsedPolicies.forEach((policy, index) => {
-        console.log(`   📄 保單 ${index + 1} (${policy.fileName}):`)
-        console.log(`      - ID: ${policy.id}`)
-        console.log(`      - 文本內容長度: ${(policy.textContent || '').length} 字元`)
-        console.log(`      - 文本內容預覽: ${(policy.textContent || '').substring(0, 100)}...`)
-        console.log(`      - AI分析資料:`, policy.policyInfo ? '✅ 有' : '❌ 無')
-        if (policy.policyInfo?.policyBasicInfo) {
-          console.log(`      - 保險公司: ${policy.policyInfo.policyBasicInfo.insuranceCompany || '未識別'}`)
-          console.log(`      - 保單名稱: ${policy.policyInfo.policyBasicInfo.policyName || '未識別'}`)
-        }
-      })
-      
-      return parsedPolicies
-    } catch (error) {
-      console.error('讀取保單資料失敗:', error)
-      return []
-    }
-  }
-
-  // 真實的AI搜尋功能
-  const executeRealSearch = async (searchTerm) => {
-    console.log(`執行真實搜尋: "${searchTerm}"`)
-
-    if (!searchTerm.trim()) {
-      setIsSearching(false)
-      return
-    }
-
-    setIsSearching(true)
-    
-    try {
-      // 獲取用戶保單資料
-      const userPolicies = getUserPolicies()
-      
-      // 獲取OpenAI API Key
-      const apiKey = localStorage.getItem('openai_api_key') || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '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'
-
-      // 使用OpenAI服務進行綜合搜尋
-      // 使用帳號設定中的API Key
-      const storedApiKey = localStorage.getItem('openai_api_key') || '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'
       const openaiService = new (await import('../../lib/openaiService')).OpenAIService(storedApiKey)
-      const result = await openaiService.comprehensiveSearch(searchTerm, userPolicies)
       
-      console.log('綜合搜尋結果:', result)
-      console.log('個人保單匹配結果:', result.personalPolicyResults)
-      console.log('網路資源搜尋結果:', result.networkResources)
+      // 使用新的公共方法，獲取5個建議
+      const batchSuggestions = await openaiService.generateMedicalSuggestions(searchTerm, 5)
       
-      // 格式化搜尋結果以符合現有UI
-      const formattedResult = {
-        id: `search-${Date.now()}`,
-        name: searchTerm,
-        description: `關於「${searchTerm}」的醫療資源分析`,
-        averageCost: result.estimatedCost,
-        costSource: result.costSource,
-        category: "搜尋結果",
-        icon: <Search className="h-5 w-5 text-blue-600" />,
-        personalPolicyCount: result.personalPolicyResults.length,
-        networkResourceCount: result.networkResources.length,
-        matchedResources: [
-          ...result.personalPolicyResults,
-          ...result.networkResources
-        ]
-      }
-
-      setSearchResult(formattedResult)
-      setQuickSearchResults([formattedResult])
+      // 過濾掉已存在的建議
+      const newSuggestions = batchSuggestions.filter(suggestion => 
+        !currentSuggestions.includes(suggestion)
+      )
       
-      // 將搜尋結果儲存到 sessionStorage，供詳情頁面使用
-      try {
-        sessionStorage.setItem('quickSearchResults', JSON.stringify([formattedResult]))
-        console.log('搜尋結果已儲存到 sessionStorage')
-      } catch (error) {
-        console.error('儲存搜尋結果到 sessionStorage 失敗:', error)
-      }
+      // 緩存結果
+      const newCache = new Map(aiSuggestionsCache)
+      newCache.set(cacheKey, newSuggestions)
+      setAiSuggestionsCache(newCache)
+      
+      console.log(`AI建議結果 (第${batchNumber}批):`, newSuggestions)
+      return newSuggestions
       
     } catch (error) {
-      console.error('搜尋失敗:', error)
-      // 顯示錯誤結果
-      const errorResult = {
-        id: `error-${Date.now()}`,
-        name: searchTerm,
-        description: `搜尋「${searchTerm}」時發生錯誤: ${error.message}`,
-        averageCost: "無法取得費用資訊",
-        costSource: "搜尋失敗",
-        category: "錯誤",
-        icon: <AlertCircle className="h-5 w-5 text-red-600" />,
-        matchedResources: []
-      }
-      setSearchResult(errorResult)
-      setQuickSearchResults([errorResult])
-      
-      // 即使是錯誤結果也儲存到 sessionStorage
-      try {
-        sessionStorage.setItem('quickSearchResults', JSON.stringify([errorResult]))
-      } catch (error) {
-        console.error('儲存錯誤結果到 sessionStorage 失敗:', error)
-      }
-      
-      // 如果是API Key問題，給出更明確的指引
-      if (error.message.includes('API 金鑰')) {
-        alert('請先到「設定」頁面輸入您的 OpenAI API 金鑰才能使用搜尋功能')
-      }
+      console.error('AI建議生成失敗:', error)
+      return []
     } finally {
-      setIsSearching(false)
+      setIsLoadingAiSuggestions(false)
     }
   }
 
-  // 執行搜尋的函數 - 使用真實AI搜尋
-  const executeSearch = (searchTerm) => {
-    executeRealSearch(searchTerm)
+  // 執行搜尋的函數 - 使用傳入的手術技術對應搜尋
+  const executeSearch = (searchTerm: string) => {
+    executeSurgicalTechSearch(searchTerm)
   }
 
   // 處理搜尋按鈕點擊
@@ -1344,19 +1627,50 @@ function QuickSearchContent({
     executeSearch(currentSearchTermRef.current)
   }
 
-  // 取消Enter鍵響應 - 只能透過點擊搜尋按鈕
-  const handleKeyDown = (e) => {
-    // 移除Enter鍵搜尋功能，只能點擊按鈕搜尋
-    return
+  // 處理鍵盤導航
+  const handleKeyDown = (e: any) => {
+    if (showSuggestions && suggestions.length > 0) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setSelectedSuggestionIndex(prev => 
+            prev < suggestions.length - 1 ? prev + 1 : prev
+          )
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1)
+          break
+        case 'Enter':
+          e.preventDefault()
+          if (selectedSuggestionIndex >= 0) {
+            handleSuggestionClick(suggestions[selectedSuggestionIndex])
+          } else {
+            handleSearch()
+          }
+          break
+        case 'Escape':
+          setShowSuggestions(false)
+          setSelectedSuggestionIndex(-1)
+          break
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSearch()
+    }
   }
 
   // 處理推薦搜尋詞點擊
-  const handleSuggestionClick = (suggestion) => {
+  const handleSuggestionClick = (suggestion: string) => {
     console.log(`點擊推薦詞: "${suggestion}"`)
 
     // 先更新搜尋詞
     setQuickSearchTerm(suggestion)
     currentSearchTermRef.current = suggestion
+    
+    // 隱藏建議列表
+    setShowSuggestions(false)
+    setSelectedSuggestionIndex(-1)
 
     // 清空之前的結果
     setQuickSearchResults([])
@@ -1377,20 +1691,71 @@ function QuickSearchContent({
             </div>
             <h2 className="text-xl font-bold text-center">智能醫療資源搜尋</h2>
             <p className="text-center text-gray-500">
-              請輸入手術名稱、治療項目或您的病況描述，AI將搜尋您的個人保單並查找相關醫療資源
+              輸入手術技術名稱（如達文西手術），AI將分析常見的應用手術，點擊展開查看保障資源
             </p>
 
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
                 <input
                   type="text"
-                  placeholder="例如：達文西攝護腺手術、心律不整治療、糖尿病足潰瘍..."
+                  placeholder="例如：達文西手術、腹腔鏡手術、內視鏡手術..."
                   className="w-full pl-10 pr-4 py-3 border rounded-md"
                   value={quickSearchTerm}
                   onChange={(e) => setQuickSearchTerm(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  onFocus={() => {
+                    if (suggestions.length > 0) setShowSuggestions(true)
+                  }}
+                  onBlur={() => {
+                    // 延遲隱藏，讓用戶有時間點擊建議
+                    setTimeout(() => setShowSuggestions(false), 200)
+                  }}
                 />
+                
+                {/* 自動完成建議列表 */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-20 max-h-64 overflow-y-auto">
+                    {suggestions.map((suggestion, index) => (
+                      <div
+                        key={suggestion}
+                        className={`px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm ${
+                          index === selectedSuggestionIndex ? 'bg-blue-100' : ''
+                        }`}
+                        onClick={() => handleSuggestionClick(suggestion)}
+                        onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Search className="h-3 w-3 text-gray-400" />
+                          <span className="flex-1">
+                            {suggestion.split('').map((char, charIndex) => {
+                              const searchTerm = quickSearchTerm.toLowerCase()
+                              const suggestionLower = suggestion.toLowerCase()
+                              const matchIndex = suggestionLower.indexOf(searchTerm)
+                              
+                              if (matchIndex !== -1 && 
+                                  charIndex >= matchIndex && 
+                                  charIndex < matchIndex + searchTerm.length) {
+                                return <span key={charIndex} className="bg-yellow-200">{char}</span>
+                              }
+                              return char
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Loading指示器 - 當AI正在加載更多建議時顯示 */}
+                    {isLoadingAiSuggestions && (
+                      <div className="px-4 py-3 border-t border-gray-100 bg-blue-50">
+                        <div className="flex items-center gap-2 text-xs text-blue-600">
+                          <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-500"></div>
+                          <span>正在搜尋更多醫療術語建議...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <Button 
                 onClick={handleSearch} 
@@ -1427,6 +1792,189 @@ function QuickSearchContent({
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             <p className="text-gray-500">搜尋中...</p>
           </div>
+        </div>
+      )}
+
+      {!isSearching && surgicalTechResult && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-2">
+                <Stethoscope className="h-6 w-6 text-blue-600" />
+                <CardTitle className="text-lg">手術技術分析結果</CardTitle>
+              </div>
+              <CardDescription>
+                針對「{surgicalTechResult.searchTerm}」的技術分析 (共找到 {surgicalTechResult.surgicalTechMapping?.availableTechniques?.length || 0} 種技術)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* 基本資訊 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Heart className="h-4 w-4 text-blue-600" />
+                      <span className="font-medium text-sm">推薦技術</span>
+                    </div>
+                    <p className="text-sm text-blue-800">
+                      {surgicalTechResult.surgicalTechMapping?.primaryTechnique || '待分析'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CreditCard className="h-4 w-4 text-green-600" />
+                      <span className="font-medium text-sm">預估費用</span>
+                    </div>
+                    <p className="text-sm text-green-800">
+                      {surgicalTechResult.surgicalTechMapping?.estimatedCost || '待估算'}
+                    </p>
+                    {surgicalTechResult.surgicalTechMapping?.costSource && (
+                      <p className="text-xs text-green-600 mt-1">
+                        📊 {surgicalTechResult.surgicalTechMapping.costSource}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* AI 綜合分析 */}
+                {surgicalTechResult.surgicalTechMapping?.analysis && (
+                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Brain className="h-4 w-4 text-amber-600" />
+                      <span className="font-medium text-sm">AI 綜合分析</span>
+                    </div>
+                    <p className="text-sm text-amber-800">
+                      {surgicalTechResult.surgicalTechMapping.analysis}
+                    </p>
+                  </div>
+                )}
+
+                {/* 常見應用手術列表 */}
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-purple-600" />
+                    常見應用手術 (點擊展開查看保障資源)
+                  </h4>
+                  
+                  {surgicalTechResult.surgicalTechMapping?.availableTechniques?.map((technique: any, index: number) => (
+                    <div key={technique.id || `tech-${index}`} className="border rounded-lg">
+                      <div 
+                        className="p-3 cursor-pointer hover:bg-gray-50 flex items-center justify-between"
+                        onClick={() => toggleTechniqueExpansion(technique.id || `tech-${index}`, technique.name)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            {expandedTechniques.has(technique.id || `tech-${index}`) ? (
+                              <ChevronDown className="h-4 w-4 text-gray-500" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-gray-500" />
+                            )}
+                            <span className="font-medium text-sm">{technique.name}</span>
+                          </div>
+                          <Badge className={technique.isRecommended ? "bg-green-600" : "bg-gray-500"}>
+                            {technique.suitability || '適用性待分析'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>{technique.estimatedCost || '費用待查'}</span>
+                          {technique.isRecommended && (
+                            <Badge variant="outline" className="bg-green-50 text-green-700">
+                              推薦
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* 展開的詳細內容 */}
+                      {expandedTechniques.has(technique.id || `tech-${index}`) && (
+                        <div className="px-3 pb-3 border-t bg-gray-50">
+                          <div className="space-y-3 mt-3">
+                            {/* 詳細搜尋結果 */}
+                            {loadingTechniques.has(technique.id || `tech-${index}`) ? (
+                              <div className="p-4 bg-blue-50 rounded text-sm text-blue-700">
+                                <div className="flex items-center gap-3 mb-3">
+                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                                  <span className="font-medium">正在搜尋相關保障資源...</span>
+                                </div>
+                                {/* 動態進度條 */}
+                                <ProgressBar />
+                                <p className="text-xs text-blue-600 mt-2">正在分析保單條款和政府補助項目...</p>
+                              </div>
+                            ) : techniqueDetailsCache.has(technique.id || `tech-${index}`) ? (
+                              <div className="space-y-2">
+                                <h5 className="font-medium text-sm text-purple-600">相關保障資源：</h5>
+                                {(() => {
+                                  const details = techniqueDetailsCache.get(technique.id || `tech-${index}`)
+                                  const allResources = [
+                                    ...(details?.personalPolicyResults || []),
+                                    ...(details?.networkResources || [])
+                                  ]
+                                  
+                                  return allResources.length > 0 ? (
+                                    <div className="grid gap-2">
+                                      {allResources.slice(0, 5).map((resource: any, i: number) => (
+                                        <div key={i} className="p-3 bg-white rounded border border-gray-200">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            {resource.category === '保單理賠' ? (
+                                              <Shield className="h-4 w-4 text-teal-600" />
+                                            ) : (
+                                              <Building className="h-4 w-4 text-blue-600" />
+                                            )}
+                                            <span className="font-medium text-sm">{resource.title}</span>
+                                            <Badge className="text-xs" variant={resource.category === '保單理賠' ? 'default' : 'secondary'}>
+                                              {resource.category === '保單理賠' ? '您的保單' : resource.category}
+                                            </Badge>
+                                          </div>
+                                          <p className="text-sm text-gray-600">可能理賠/補助：{resource.amount}</p>
+                                          {resource.aiAnalysis?.confidenceLevel && (
+                                            <p className="text-xs text-gray-400 mt-1">
+                                              🤖 AI信心度: {resource.aiAnalysis.confidenceLevel}
+                                            </p>
+                                          )}
+                                        </div>
+                                      ))}
+                                      {allResources.length > 5 && (
+                                        <div className="text-sm text-gray-500 text-center py-2">
+                                          ...及其他 {allResources.length - 5} 項資源
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="p-4 bg-gray-100 rounded text-sm text-gray-500 text-center">
+                                      未找到相關保障資源，建議諮詢保險專業人員
+                                    </div>
+                                  )
+                                })()}
+                              </div>
+                            ) : (
+                              <div className="p-4 bg-gray-100 rounded text-sm text-gray-500 text-center">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400 mx-auto mb-2"></div>
+                                準備搜尋相關資源...
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )) || (
+                    <div className="p-4 text-center text-gray-500 text-sm">
+                      未找到相關技術資訊
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {!isSearching && quickSearchTerm && !surgicalTechResult && (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <FileSearch className="h-12 w-12 text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium mb-2">搜尋完成</h3>
+          <p className="text-gray-500 max-w-md">
+            未找到與「{quickSearchTerm}」相關的手術技術資訊。請嘗試使用不同的關鍵詞。
+          </p>
         </div>
       )}
 

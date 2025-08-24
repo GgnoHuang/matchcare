@@ -1589,6 +1589,90 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
   }
 
   /**
+   * 手術技術對應分析 - 分析手術可用的技術方法
+   */
+  async analyzeSurgicalTechMapping(surgeryName: string): Promise<{
+    surgeryName: string;
+    availableTechniques: any[];
+    primaryTechnique: string;
+    estimatedCost: string;
+    costSource: string;
+    analysis: string;
+  }> {
+    const prompt = `你是資深的外科醫學專家，請分析「${surgeryName}」這個手術可以使用的技術方法。
+        「${surgeryName}」是我從input輸入框傳入的，以此為關鍵詞幫我找。
+          ## 🎯 分析重點
+
+          ### 1. 技術方法對應分析
+          請分析此關鍵字（手術名）可以應用於哪些技術方法
+          例如關鍵字Ａ（上位概念）：達文西手術
+          對應Ｂ（下位應用實例）：胃癌切除、子宮切除、瓣膜修復…
+          也就是說：Ｂ 屬於 Ａ 的應用場景。我希望你給我好幾種B
+
+          ### 2. 每種技術評估
+          對於每種適用的技術，請分析：
+          - 適用程度 (高度適用/中度適用/低度適用/不適用)
+          - 優點和缺點
+          - 費用範圍
+          - 恢復時間
+          - 風險評估
+
+          ### 3. 推薦建議
+          - 最推薦的技術方法
+          - 費用預估
+          - 選擇建議
+
+          ## 📋 回傳格式
+          {
+            "surgeryName": "手術名稱",
+            "availableTechniques": [
+              {
+                "id": "technique_1",
+                "name": "Ｂ（下位應用實例）",
+                "suitability": "高度適用/中度適用/低度適用",
+                "advantages": ["優點1", "優點2"],
+                "disadvantages": ["缺點1", "缺點2"],
+                "estimatedCost": "費用範圍",
+                "recoveryTime": "恢復時間",
+                "riskLevel": "風險等級",
+                "description": "詳細說明",
+                "isRecommended": true/false
+              }
+            ],
+            "primaryTechnique": "最推薦的技術名稱",
+            "estimatedCost": "整體費用預估",
+            "costSource": "費用來源說明",
+            "analysis": "綜合分析和建議"
+          }
+
+          請確保分析基於醫學專業知識，提供準確的技術對應關係。`;
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o-mini');
+      const result = this.parseJSONResponse(response.content);
+      
+      return {
+        surgeryName: result.surgeryName || surgeryName,
+        availableTechniques: result.availableTechniques || [],
+        primaryTechnique: result.primaryTechnique || '無',
+        estimatedCost: result.estimatedCost || '無法估算',
+        costSource: result.costSource || 'AI技術分析',
+        analysis: result.analysis || '無'
+      };
+    } catch (error) {
+      console.error('手術技術對應分析失敗:', error);
+      return {
+        surgeryName,
+        availableTechniques: [],
+        primaryTechnique: '建議諮詢專業醫師',
+        estimatedCost: '無法估算',
+        costSource: '分析失敗',
+        analysis: '無法進行技術分析，建議諮詢專業醫師'
+      };
+    }
+  }
+
+  /**
    * 綜合資源搜尋（合併原本的政府/金融/慈善搜尋）
    */
   async searchComprehensiveResources(searchTerm: string): Promise<any[]> {
@@ -1690,7 +1774,7 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
   }
 
   /**
-   * 綜合搜尋功能 - 結合個人保單和網路資源
+   * 綜合搜尋功能 - 結合個人保單和網路資源（AI自動比對使用）
    */
   async comprehensiveSearch(searchTerm: string, userPolicies: any[]): Promise<{
     estimatedCost: string;
@@ -1700,14 +1784,14 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
     webResources: any[];
     searchTerm: string;
   }> {
-    console.log(`🚀 開始綜合搜尋（個人保單 + 網路資源 + 爬蟲）: ${searchTerm}`);
+    console.log(`🚀 開始綜合搜尋（個人保單 + 網路資源）: ${searchTerm}`);
     
     // 1. 搜尋個人保單
     console.log('👤 第一階段：搜尋個人保單匹配');
     const personalPolicyResults = await this.searchPersonalPolicies(searchTerm, userPolicies);
     
-    // 2. 搜尋網路資源（包含網路爬蟲）
-    console.log('🌐 第二階段：搜尋網路資源 + 爬蟲');
+    // 2. 搜尋網路資源
+    console.log('🌐 第二階段：搜尋網路資源');
     const networkSearch = await this.searchMedicalResources(searchTerm);
     
     // 3. 決定費用估算來源
@@ -1736,6 +1820,83 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
       networkResources: networkSearch.resources,
       webResources: [],
       searchTerm
+    };
+  }
+
+  /**
+   * 快速搜尋 - 手術技術對應系統（第一階段）
+   */
+  async quickSearchSurgicalTech(searchTerm: string): Promise<{
+    surgicalTechMapping: any;
+    searchTerm: string;
+    isFirstStage: boolean;
+  }> {
+    console.log(`🏥 快速搜尋：手術技術對應分析 - ${searchTerm}`);
+    
+    // 只進行手術技術對應分析（1次API）
+    const surgicalMapping = await this.analyzeSurgicalTechMapping(searchTerm);
+    
+    console.log(`✅ 快速分析完成: 發現 ${surgicalMapping.availableTechniques?.length || 0} 種可用技術`);
+    
+    return {
+      surgicalTechMapping: surgicalMapping,
+      searchTerm,
+      isFirstStage: true
+    };
+  }
+
+  /**
+   * 詳細技術搜尋 - 第二階段（當用戶點擊特定技術時）
+   */
+  async searchTechniqueDetails(searchTerm: string, techniqueId: string, userPolicies: any[]): Promise<{
+    estimatedCost: string;
+    costSource: string;
+    personalPolicyResults: any[];
+    networkResources: any[];
+    webResources: any[];
+    searchTerm: string;
+    selectedTechnique?: any;
+  }> {
+    console.log(`🔍 開始詳細技術搜尋: ${searchTerm} - ${techniqueId}`);
+    
+    // 針對選擇的技術進行詳細搜尋
+    const enhancedSearchTerm = `${searchTerm} ${techniqueId}`;
+    
+    // 1. 搜尋個人保單
+    console.log('👤 階段2：搜尋個人保單匹配');
+    const personalPolicyResults = await this.searchPersonalPolicies(enhancedSearchTerm, userPolicies);
+    
+    // 2. 搜尋醫療資源
+    console.log('🌐 階段2：搜尋醫療資源');
+    const networkSearch = await this.searchMedicalResources(enhancedSearchTerm);
+    
+    // 3. 決定費用估算來源
+    let estimatedCost = networkSearch.estimatedCost;
+    let costSource = networkSearch.costSource;
+    
+    // 如果個人保單有匹配結果，優先使用保單資料推估費用
+    if (personalPolicyResults.length > 0) {
+      const maxCoverage = personalPolicyResults.reduce((max, policy) => {
+        const amount = policy.amount.replace(/[^0-9]/g, '');
+        return Math.max(max, parseInt(amount) || 0);
+      }, 0);
+      
+      if (maxCoverage > 0) {
+        estimatedCost = `約 ${maxCoverage.toLocaleString()} 元左右`;
+        costSource = '根據您的保單理賠額度推估';
+      }
+    }
+    
+    console.log(`✅ 詳細搜尋完成: 個人保單 ${personalPolicyResults.length} 項, 醫療資源 ${networkSearch.resources.length} 項`);
+    
+    return {
+      estimatedCost,
+      costSource,
+      personalPolicyResults,
+      networkResources: networkSearch.resources,
+      webResources: [],
+      searchTerm: enhancedSearchTerm,
+      selectedTechnique: techniqueId
     };
   }
 
@@ -1814,6 +1975,50 @@ https://tw.tzuchi.org/%E6%85%88%E5%96%84%E6%95%91%E5%8A%A9?utm_source=chatgpt.co
         timeline: [],
         alternativeOptions: []
       };
+    }
+  }
+
+  /**
+   * 生成醫療術語Autocomplete建議（分批返回）
+   */
+  async generateMedicalSuggestions(searchTerm: string, batchSize: number = 10): Promise<string[]> {
+    if (!searchTerm.trim()) return []
+    
+    const prompt = `你是專業的醫療術語助手。用戶輸入了「${searchTerm}」，請提供${batchSize}個相關的中文醫療術語建議。
+
+要求：
+1. 只能回傳醫療、健康、疾病、手術、治療相關的專業術語
+2. 中文術語為主
+3. 不要包含非醫療的詞彙
+4. 格式為JSON陣列，例如：["達文西手術","抽脂手術","青光眼手術","ACL重建術","闌尾切除術","括約肌成形術","靜脈曲張手術","剖腹術", "腹腔鏡手術","胰臟癌","胰臟癌", "微創手術", "內視鏡手術", "機械手臂手術", "胸腔鏡手術"]
+6. 請提供較爲相關和常用的術語佔80%，較為專業的名詞佔20%
+請直接回傳JSON陣列，不要其他說明文字。
+搜尋回傳速度越快越好，我愛你
+`
+
+    try {
+      const response = await this.callAPI(prompt, 'gpt-4o-mini')
+      
+      let suggestions: string[] = []
+      try {
+        const cleanedResponse = response.content.trim().replace(/```json\n?|\n?```/g, '')
+        suggestions = JSON.parse(cleanedResponse)
+        
+        if (!Array.isArray(suggestions)) {
+          console.warn('AI回應格式不正確，不是陣列')
+          return []
+        }
+        
+        return suggestions
+          .filter(term => typeof term === 'string' && term.trim().length > 0)
+          .slice(0, batchSize)
+      } catch (parseError) {
+        console.warn('無法解析AI回應為JSON:', parseError)
+        return []
+      }
+    } catch (error) {
+      console.error('AI建議生成失敗:', error)
+      return []
     }
   }
 
