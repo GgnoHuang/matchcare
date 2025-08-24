@@ -419,7 +419,8 @@ export default function InsurancePage() {
                       )}
                     </CardDescription>
                   </div>
-                  <Link
+                  {/* 暫時隱藏 啟動AI保險精靈 按鈕*/}
+                  {/* <Link
                     href={`/insurance/${policy.id}`}
                     className="w-full sm:w-auto"
                   >
@@ -431,7 +432,7 @@ export default function InsurancePage() {
                       <Sparkles className="h-4 w-4" />
                       啟動AI保險精靈
                     </Button>
-                  </Link>
+                  </Link> */}
                 </div>
               </CardHeader>
               <CardContent>
@@ -539,7 +540,8 @@ export default function InsurancePage() {
                         )}
                       </CardDescription>
                     </div>
-                    <Link
+                    {/* 暫時隱藏 啟動AI保險精靈 按鈕*/}
+                    {/* <Link
                       href={`/insurance/${policy.id}`}
                       className="w-full sm:w-auto"
                     >
@@ -551,7 +553,7 @@ export default function InsurancePage() {
                         <Sparkles className="h-4 w-4" />
                         啟動AI保險精靈
                       </Button>
-                    </Link>
+                    </Link> */}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -657,7 +659,9 @@ export default function InsurancePage() {
                         )}
                       </CardDescription>
                     </div>
-                    <Link
+
+                    {/* 暫時隱藏 啟動AI保險精靈 按鈕*/}
+                    {/* <Link
                       href={`/insurance/${policy.id}`}
                       className="w-full sm:w-auto"
                     >
@@ -669,7 +673,7 @@ export default function InsurancePage() {
                         <Sparkles className="h-4 w-4" />
                         啟動AI保險精靈
                       </Button>
-                    </Link>
+                    </Link> */}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -776,7 +780,8 @@ export default function InsurancePage() {
                         )}
                       </CardDescription>
                     </div>
-                    <Link
+                    {/* 暫時隱藏 啟動AI保險精靈 按鈕*/}
+                    {/* <Link
                       href={`/insurance/${policy.id}`}
                       className="w-full sm:w-auto"
                     >
@@ -788,7 +793,7 @@ export default function InsurancePage() {
                         <Sparkles className="h-4 w-4" />
                         啟動AI保險精靈
                       </Button>
-                    </Link>
+                    </Link> */}
                   </div>
                 </CardHeader>
                 <CardContent>
