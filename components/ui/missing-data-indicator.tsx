@@ -126,12 +126,12 @@ export function InlineMissingData({ value, fieldName, isPlaceholder = false }: I
   }
 
   return (
-    <span className="flex items-center gap-1">
+    <span className="inline-flex items-center gap-1">
       <span className="text-gray-400">{value}</span>
-      <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 text-xs px-1 py-0">
-        <AlertTriangle className="h-2 w-2 mr-1" />
+      <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-200 rounded-md text-xs px-1 py-0.5">
+        <AlertTriangle className="h-2 w-2" />
         待補充
-      </Badge>
+      </span>
     </span>
   )
 }

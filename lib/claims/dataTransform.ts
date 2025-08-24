@@ -357,8 +357,28 @@ export function transformInsurancePolicy(policy: InsurancePolicy): ClaimInsuranc
   
   const company = basicInfo?.insuranceCompany || '未知保險公司'
   const name = basicInfo?.policyName || '保單名稱待補充'
-  const type = basicInfo?.policyType || '保險類型待補充'
   const policyNumber = basicInfo?.policyNumber || '保單號碼待補充'
+  
+  // ✅ 2024-08-24 新增：智能保險類型分類邏輯 (與保單總覽頁面保持一致)
+  // 優先使用 AI 原始分析結果，若為空或待補充則使用關鍵字智能分析
+  let type = basicInfo?.policyType || '保險類型待補充'
+  
+  // 如果 AI 原始分析結果不完整，使用保單條款關鍵字智能判斷
+  if (!basicInfo?.policyType || basicInfo.policyType === '待輸入' || basicInfo.policyType === '保險類型待補充') {
+    type = '醫療險'; // 預設類型
+    
+    // 從保單條款中智能判斷保險類型（與 /app/insurance/page.tsx 第112-119行邏輯一致）
+    if (basicInfo?.policyTerms && basicInfo.policyTerms !== '待輸入') {
+      if (basicInfo.policyTerms.includes('意外')) {
+        type = '意外險';
+      } else if (basicInfo.policyTerms.includes('重大疾病') || 
+                 basicInfo.policyTerms.includes('癌症') || 
+                 basicInfo.policyTerms.includes('心臟病')) {
+        type = '重疾險';
+      }
+      // 如果沒有匹配到關鍵字，保持預設的「醫療險」
+    }
+  }
   
   if (company === '未知保險公司' || !basicInfo?.insuranceCompany || basicInfo.insuranceCompany === '待輸入') {
     missingFields.push('保險公司')

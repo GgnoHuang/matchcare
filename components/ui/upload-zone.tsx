@@ -18,9 +18,16 @@ export interface UploadedFile {
 interface UploadZoneProps {
   onFileProcessed: (fileData: UploadedFile | null) => void;
   onError: (errorMessage: string) => void;
+  title?: string; // 可選的標題文字
+  description?: string; // 可選的描述文字
 }
 
-const UploadZone: React.FC<UploadZoneProps> = ({ onFileProcessed, onError }) => {
+const UploadZone: React.FC<UploadZoneProps> = ({ 
+  onFileProcessed, 
+  onError, 
+  title = "上傳病例或保單文件",
+  description = "支援 PDF、JPG、PNG、WebP 格式，讓 AI 分析您的具體情況"
+}) => {
   const [dragActive, setDragActive] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
@@ -47,6 +54,23 @@ const UploadZone: React.FC<UploadZoneProps> = ({ onFileProcessed, onError }) => 
     }
   }, []);
 
+  // 將文件轉為 base64 的輔助函數
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // 移除 data:mime;base64, 前綴，只保留純 base64 字符串
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = () => {
+        reject(new Error('文件讀取失敗'));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       handleFile(e.target.files[0]);
@@ -69,10 +93,14 @@ const UploadZone: React.FC<UploadZoneProps> = ({ onFileProcessed, onError }) => 
         const text = await PDFUtils.extractTextFromPDF(file);
         setExtractedText(text);
         
+        // 同時生成 base64 供 AI 圖像分析使用
+        const base64 = await convertFileToBase64(file);
+        
         const fileData: UploadedFile = {
           type: 'pdf',
           filename: file.name,
           text: text,
+          base64: base64, // 新增 base64 欄位
           size: file.size
         };
         
@@ -122,10 +150,10 @@ const UploadZone: React.FC<UploadZoneProps> = ({ onFileProcessed, onError }) => 
       <div className="mb-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Upload className="h-5 w-5" />
-          上傳病例或保單文件
+          {title}
         </h3>
         <p className="text-sm text-gray-600 mt-1">
-          支援 PDF、JPG、PNG、WebP 格式，讓 AI 分析您的具體情況
+          {description}
         </p>
       </div>
       

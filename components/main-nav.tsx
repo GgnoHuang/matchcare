@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Shield, Menu, X, User, LogOut, Sparkles, FileText } from "lucide-react"
+import { Shield, Menu, X, User, LogOut, Sparkles, FileText, Zap } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { checkAuth, logout } from "@/app/actions/auth-service"
 import {
@@ -90,18 +90,25 @@ export function MainNav() {
       description: "智能匹配保障資源",
     },
     {
-      href: "/claims",
-      label: "理賠申請",
-      icon: <FileText className="h-4 w-4" />,
-      description: "快速申請理賠",
+      href: "/ai-insurance-wizard",
+      label: "AI保險精靈",
+      icon: <Zap className="h-4 w-4" />,
+      description: "上傳保單立即分析",
     },
+    // {
+    //   href: "/claims",
+    //   label: "理賠申請",
+    //   icon: <FileText className="h-4 w-4" />,
+    //   description: "快速申請理賠",
+    // },//功能移動別的BTN去
   ]
 
   // 次要功能項目
   const secondaryNavItems = [
-    { href: "/", label: "首頁" },
+    // { href: "/", label: "首頁" },
     { href: "/insurance", label: "保單總覽" },
     { href: "/medical-records", label: "病歷管理" },
+    { href: "/claims", label: "理賠申請" },
     // TODO: 暫時隱藏其他福利資源功能 - 可在需要時恢復顯示
     // { href: "/resources", label: "其他福利資源" },
   ]

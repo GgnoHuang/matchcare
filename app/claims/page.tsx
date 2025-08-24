@@ -31,6 +31,7 @@ export default function ClaimsPage() {
   const [claims, setClaims] = useState<Claim[]>([])
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [lastLoadTime, setLastLoadTime] = useState(0)
 
   // 檢查用戶登入狀態
   useEffect(() => {
@@ -88,6 +89,14 @@ export default function ClaimsPage() {
   const loadUserClaims = async () => {
     if (!user?.id) return
     
+    // 防抖機制：如果距離上次載入少於 1 秒，則跳過
+    const now = Date.now()
+    if (now - lastLoadTime < 1000) {
+      console.log('防抖：跳過重複載入')
+      return
+    }
+    setLastLoadTime(now)
+    
     try {
       console.log('載入用戶理賠申請資料，用戶ID:', user.id)
       
@@ -98,8 +107,15 @@ export default function ClaimsPage() {
       
       if (claimsData) {
         const parsedClaims = JSON.parse(claimsData)
-        setClaims(parsedClaims)
-        console.log('載入的理賠申請資料:', parsedClaims)
+        
+        // 去除重複的理賠記錄（以 ID 為基準）
+        const uniqueClaims = parsedClaims.filter((claim: Claim, index: number, arr: Claim[]) => 
+          arr.findIndex(c => c.id === claim.id) === index
+        )
+        
+        setClaims(uniqueClaims)
+        console.log('載入的理賠申請資料:', uniqueClaims)
+        console.log('原始資料筆數:', parsedClaims.length, '去重後筆數:', uniqueClaims.length)
       } else {
         console.log('未找到理賠申請資料，設為空陣列')
         setClaims([])

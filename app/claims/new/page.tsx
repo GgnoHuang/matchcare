@@ -60,22 +60,78 @@ export default function NewClaimPage() {
         
         setUser(authUser)
         
-        // 載入用戶的醫療記錄、保單和診斷證明
-        const [rawMedicalRecords, rawInsurancePolicies, diagnosisCertificates] = await Promise.all([
-          userDataService.getMedicalRecords(authUser.id),
-          userDataService.getInsurancePolicies(authUser.id),
-          userDataService.getDiagnosisCertificates(authUser.id)
-        ])
+        // 載入用戶的醫療記錄、保單和診斷證明（從 Supabase）
+        console.log('載入用戶資料，電話號碼:', authUser.phoneNumber)
+        
+        // 從 Supabase 載入保單資料
+        const { getUserPolicies } = await import('../../../lib/supabaseDataService')
+        const policiesResult = await getUserPolicies(authUser.phoneNumber || '')
+        const rawInsurancePolicies = policiesResult.success ? policiesResult.policies : []
+        
+        // 從 Supabase 載入醫療記錄
+        let rawMedicalRecords: any[] = []
+        if (authUser.phoneNumber) {
+          try {
+            const { supabaseConfig } = await import('../../../lib/supabase')
+            const apiUrl = `${supabaseConfig.baseUrl}/users_basic?select=*,medical_records(*)&phonenumber=eq.${authUser.phoneNumber}`
+            const response = await fetch(apiUrl, {
+              headers: {
+                'apikey': supabaseConfig.apiKey,
+                'Authorization': `Bearer ${supabaseConfig.apiKey}`
+              }
+            })
+            
+            if (response.ok) {
+              const userData = await response.json()
+              rawMedicalRecords = userData[0]?.medical_records || []
+              console.log('從 Supabase 載入醫療記錄:', rawMedicalRecords.length, '筆')
+            }
+          } catch (error) {
+            console.error('載入醫療記錄失敗:', error)
+          }
+        }
+        
+        // 診斷證明暫時使用空陣列
+        const diagnosisCertificates: any[] = []
         
         console.log('載入的原始資料:')
-        console.log('- 醫療記錄:', rawMedicalRecords.length, '筆')
-        console.log('- 保險保單:', rawInsurancePolicies.length, '筆') 
+        console.log('- 醫療記錄:', rawMedicalRecords.length, '筆', rawMedicalRecords)
+        console.log('- 保險保單:', rawInsurancePolicies.length, '筆', rawInsurancePolicies) 
         console.log('- 診斷證明:', diagnosisCertificates.length, '筆')
+        console.log('- 用戶電話號碼:', authUser.phoneNumber)
         
-        // 轉換為理賠格式
-        const transformedMedicalRecords = rawMedicalRecords.map(transformMedicalRecord)
+        // 轉換為理賠格式（直接處理 Supabase 資料格式）
+        const transformedMedicalRecords = rawMedicalRecords.map((record: any, index: number) => {
+          const medicalData = record.medical_data || {}
+          const hospital = medicalData.hospitalName || '未知醫院'
+          const department = medicalData.department || '未知科別'  
+          const doctor = medicalData.doctorName || '未知醫師'
+          const diagnosis = medicalData.diagnosis || '診斷資料處理中'
+          const treatment = medicalData.treatment || '治療記錄處理中'
+          const medications = medicalData.medications || '用藥記錄處理中'
+          const visitDate = medicalData.visitDate || record.upload_date
+          
+          return {
+            id: record.id || `record_${index + 1}`,
+            hospital: hospital,
+            department: department,
+            date: visitDate ? new Date(visitDate).toLocaleDateString('zh-TW') : '未知日期',
+            diagnosis: diagnosis,
+            doctor: doctor,
+            treatments: treatment.split(',').map((t: string) => t.trim()).filter((t: string) => t && t !== '治療記錄處理中'),
+            medications: medications.split(',').map((m: string) => m.trim()).filter((m: string) => m && m !== '用藥記錄處理中'),
+            claimSuccessRate: 85,
+            hasDataIssues: false,
+            missingFields: [],
+            sourceData: record
+          }
+        })
+        
         const transformedInsurancePolicies = rawInsurancePolicies.map(transformInsurancePolicy)
         const documentsRequired = generateRequiredDocuments(authUser.id, diagnosisCertificates)
+        
+        console.log('轉換後的醫療記錄:', transformedMedicalRecords)
+        console.log('轉換後的保單資料:', transformedInsurancePolicies)
         
         setMedicalRecords(transformedMedicalRecords)
         setInsurancePolicies(transformedInsurancePolicies)
