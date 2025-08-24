@@ -1492,14 +1492,21 @@ function QuickSearchContent({
   const [isLoadingAiSuggestions, setIsLoadingAiSuggestions] = useState(false)
   
   // 配置參數
-  const AI_SUGGESTION_THRESHOLD = 3 // 當靜態詞庫匹配少於3個時，調用AI
-  const ENABLE_AI_SUGGESTIONS = true // 暫時停用AI功能（避免API調用複雜度），可設為true來啟用
+  const ENABLE_AI_SUGGESTIONS = true // 啟用AI建議功能：總是補充靜態建議之外的更多選項
 
-  // 當搜尋詞變化時更新ref和suggestions（混合模式）
+  // 當搜尋詞變化時更新ref和suggestions（優化的debounce模式）
   useEffect(() => {
     currentSearchTermRef.current = quickSearchTerm
     
+    let debounceTimer: NodeJS.Timeout | null = null
+    let batchLoadingTimers: NodeJS.Timeout[] = [] // 存儲分批加載的 timers
+    
     const updateSuggestions = async () => {
+      // 清除所有之前的第二批 timers，避免無用的API調用
+      batchLoadingTimers.forEach(timer => clearTimeout(timer))
+      batchLoadingTimers.length = 0 // 清空數組
+      console.log('🧹 已清除所有之前的第二批timers，避免無用API調用')
+      
       if (quickSearchTerm.trim().length === 0) {
         setSuggestions([])
         setShowSuggestions(false)
@@ -1512,64 +1519,160 @@ function QuickSearchContent({
         term.toLowerCase().includes(quickSearchTerm.toLowerCase())
       ).slice(0, 8)
       
-      // 立即顯示靜態建議（快速響應）
-      setSuggestions(staticSuggestions)
-      setShowSuggestions(staticSuggestions.length > 0)
-      setSelectedSuggestionIndex(-1)
+      // 獲取當前的建議列表，避免閃爍
+      const currentSuggestions = suggestions
       
-      // 第二步：如果靜態建議不足且啟用AI，嘗試AI補充
+      // 如果有靜態建議或沒有當前建議，立即更新
+      if (staticSuggestions.length > 0 || currentSuggestions.length === 0) {
+        setSuggestions(staticSuggestions)
+        setShowSuggestions(staticSuggestions.length > 0)
+        setSelectedSuggestionIndex(-1)
+      }
+      
+      // 第二步：AI建議的新邏輯 - 總是補充AI建議（不管靜態建議數量）
       if (ENABLE_AI_SUGGESTIONS && 
-          staticSuggestions.length < AI_SUGGESTION_THRESHOLD && 
-          quickSearchTerm.trim().length >= 1) { // 至少輸入1個字才調用AI
+          quickSearchTerm.trim().length >= 1) {
         
-        try {
-          // 先獲取第一批AI建議
-          const firstBatchSuggestions = await generateAIMedicalSuggestions(quickSearchTerm, staticSuggestions)
-          
-          if (firstBatchSuggestions.length > 0) {
-            // 合併靜態和AI建議，去重
-            const combinedSuggestions = [
-              ...staticSuggestions,
-              ...firstBatchSuggestions.filter(ai => !staticSuggestions.includes(ai))
-            ].slice(0, 10) // 先顯示10個（靜態+第一批AI）
+        const currentLength = quickSearchTerm.trim().length
+        
+        if (currentLength === 1) {
+          // 第一個字元：立即fetch第一批5個建議
+          console.log('第一個字元，立即fetch第一批5個AI建議')
+          try {
+            // 第一次fetch：獲取5個建議
+            const firstBatchSuggestions = await generateAIMedicalSuggestions(quickSearchTerm, staticSuggestions, 5)
             
-            setSuggestions(combinedSuggestions)
-            setShowSuggestions(combinedSuggestions.length > 0)
-            console.log(`混合建議結果: 靜態${staticSuggestions.length}個 + AI第一批${firstBatchSuggestions.length}個`)
-            
-            // 延遲1秒後獲取第二批建議
-            setTimeout(async () => {
-              try {
-                const secondBatchSuggestions = await generateAIMedicalSuggestions(quickSearchTerm, combinedSuggestions)
+            if (firstBatchSuggestions.length > 0) {
+              const firstCombined = [
+                ...staticSuggestions,
+                ...firstBatchSuggestions.filter(ai => !staticSuggestions.includes(ai))
+              ].slice(0, 5) // 先只顯示5個
+              
+              setSuggestions(firstCombined)
+              setShowSuggestions(firstCombined.length > 0)
+              console.log(`第一字元 - 第一批顯示: ${firstCombined.length}個`)
+              console.log('第一批建議:', firstCombined)
+              
+              // 延遲 0.2 秒後fetch第二批建議
+              const timer1 = setTimeout(() => {
+                setIsLoadingAiSuggestions(true) // 顯示 loading
+                console.log('開始fetch第二批建議...')
                 
-                if (secondBatchSuggestions.length > 0) {
-                  const finalSuggestions = [
-                    ...combinedSuggestions,
-                    ...secondBatchSuggestions.filter(ai => !combinedSuggestions.includes(ai))
-                  ].slice(0, 15) // 最終限制15個
-                  
-                  setSuggestions(finalSuggestions)
-                  console.log(`完整建議結果: 總共${finalSuggestions.length}個 (包含第二批${secondBatchSuggestions.length}個)`)
-                }
-              } catch (error) {
-                console.warn('第二批AI建議獲取失敗:', error)
-              }
-            }, 1000)
+                // 第二次fetch：再獲取5個建議
+                const timer2 = setTimeout(async () => {
+                  try {
+                    const secondBatchSuggestions = await generateAIMedicalSuggestions(quickSearchTerm, firstCombined, 5)
+                    
+                    const finalCombined = [
+                      ...firstCombined,
+                      ...secondBatchSuggestions.filter(ai => !firstCombined.includes(ai))
+                    ].slice(0, 10) // 最終顯示10個
+                    
+                    setSuggestions(finalCombined)
+                    setIsLoadingAiSuggestions(false)
+                    console.log(`第一字元 - 完整顯示: ${finalCombined.length}個`)
+                    console.log('完整建議:', finalCombined)
+                  } catch (error) {
+                    console.warn('第二批AI建議失敗:', error)
+                    setIsLoadingAiSuggestions(false)
+                  }
+                }, 200) // 再等 0.2 秒後fetch第二批
+                
+                batchLoadingTimers.push(timer2)
+              }, 200) // 0.2 秒後開始第二批fetch
+              
+              batchLoadingTimers.push(timer1)
+            }
+          } catch (error) {
+            console.warn('第一字元AI建議失敗，保留靜態建議:', error)
           }
-        } catch (error) {
-          console.warn('AI建議補充失敗，保留靜態建議:', error)
-          // 保留原有的靜態建議
+        } else {
+          // 後續字元：使用debounce 0.3秒，但保持當前建議不消失
+          console.log('後續字元，設置0.3秒debounce，保持當前建議顯示')
+          
+          // 如果有當前建議且沒有足夠的靜態建議，保持顯示當前建議
+          if (currentSuggestions.length > 0 && staticSuggestions.length < 3) {
+            setShowSuggestions(true) // 確保建議框保持顯示
+            console.log('保持當前建議顯示，避免閃爍')
+          }
+          
+          debounceTimer = setTimeout(async () => {
+            try {
+              // 第一次fetch：獲取5個建議
+              const firstBatchSuggestions = await generateAIMedicalSuggestions(quickSearchTerm, staticSuggestions, 5)
+              
+              if (firstBatchSuggestions.length > 0) {
+                const firstCombined = [
+                  ...staticSuggestions,
+                  ...firstBatchSuggestions.filter(ai => !staticSuggestions.includes(ai))
+                ].slice(0, 5) // 先只顯示5個
+                
+                setSuggestions(firstCombined)
+                setShowSuggestions(firstCombined.length > 0)
+                console.log(`Debounced - 第一批顯示: ${firstCombined.length}個`)
+                console.log('Debounce 第一批建議:', firstCombined)
+                
+                // 延遲 0.2 秒後fetch第二批建議
+                const timer1 = setTimeout(() => {
+                  setIsLoadingAiSuggestions(true) // 顯示 loading
+                  console.log('Debounce - 開始fetch第二批建議...')
+                  
+                  // 第二次fetch：再獲取5個建議
+                  const timer2 = setTimeout(async () => {
+                    try {
+                      const secondBatchSuggestions = await generateAIMedicalSuggestions(quickSearchTerm, firstCombined, 5)
+                      
+                      const finalCombined = [
+                        ...firstCombined,
+                        ...secondBatchSuggestions.filter(ai => !firstCombined.includes(ai))
+                      ].slice(0, 10) // 最終顯示10個
+                      
+                      setSuggestions(finalCombined)
+                      setIsLoadingAiSuggestions(false)
+                      console.log(`Debounced - 完整顯示: ${finalCombined.length}個`)
+                      console.log('Debounce 完整建議:', finalCombined)
+                    } catch (error) {
+                      console.warn('Debounce 第二批AI建議失敗:', error)
+                      setIsLoadingAiSuggestions(false)
+                    }
+                  }, 200) // 再等 0.2 秒後fetch第二批
+                  
+                  batchLoadingTimers.push(timer2)
+                }, 200) // 0.2 秒後開始第二批fetch
+                
+                batchLoadingTimers.push(timer1)
+              } else if (staticSuggestions.length > 0) {
+                // 如果AI沒有返回建議，但有靜態建議，則使用靜態建議
+                setSuggestions(staticSuggestions)
+                setShowSuggestions(true)
+              }
+            } catch (error) {
+              console.warn('Debounced AI建議失敗:', error)
+              // 錯誤時如果有靜態建議，保持靜態建議
+              if (staticSuggestions.length > 0) {
+                setSuggestions(staticSuggestions)
+                setShowSuggestions(true)
+              }
+            }
+          }, 300) // 0.3秒延遲
         }
       }
     }
     
     updateSuggestions()
-  }, [quickSearchTerm, aiSuggestionsCache]) // 加入aiSuggestionsCache依賴
+    
+    // 清理函數
+    return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+      }
+    }
+  }, [quickSearchTerm]) // 只依賴搜尋詞，避免 cache 更新造成無限循環
 
   // 使用傳入的getUserPolicies函數
 
   // AI動態生成醫療術語建議（支持分批加載）
-  const generateAIMedicalSuggestions = async (searchTerm: string, currentSuggestions: string[]): Promise<string[]> => {
+  const generateAIMedicalSuggestions = async (searchTerm: string, currentSuggestions: string[], suggestionCount: number = 5): Promise<string[]> => {
     if (!ENABLE_AI_SUGGESTIONS || !searchTerm.trim()) return []
     
     // 檢查緩存（為分批加載創建不同的key）
@@ -1593,8 +1696,8 @@ function QuickSearchContent({
       
       const openaiService = new (await import('../../lib/openaiService')).OpenAIService(storedApiKey)
       
-      // 使用新的公共方法，獲取5個建議
-      const batchSuggestions = await openaiService.generateMedicalSuggestions(searchTerm, 5)
+      // 使用新的公共方法，獲取指定數量的建議
+      const batchSuggestions = await openaiService.generateMedicalSuggestions(searchTerm, suggestionCount)
       
       // 過濾掉已存在的建議
       const newSuggestions = batchSuggestions.filter(suggestion => 

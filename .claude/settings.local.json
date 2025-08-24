@@ -22,7 +22,8 @@
       "Bash(brew services:*)",
       "Bash(npm run typecheck:*)",
       "Bash(npx tsc:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(node:*)"
     ],
     "deny": []
   }
