@@ -95,7 +95,9 @@ export async function getUserPolicies(phoneNumber: string) {
           }
         },
         // 為了向後相容，也直接提供 coverage 欄位
-        coverage: coverage
+        coverage: coverage,
+        // 同時保留原始的 coverage_items 欄位供其他地方使用
+        coverage_items: coverage
       }
     })
 

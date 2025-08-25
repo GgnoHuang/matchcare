@@ -426,7 +426,7 @@ export default function MyDataPage() {
         // 兩階段：先摘要，再推理
         const summary = await openaiService.summarizeInsurancePolicy(
           fileData.text || '',
-          fileData.base64
+          fileData.type === 'image' ? fileData.base64 : null
         )
         const analysis = await openaiService.analyzePolicyFromSummary({
           policyInfo: summary?.policyInfo || {},

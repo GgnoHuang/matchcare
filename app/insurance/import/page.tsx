@@ -119,9 +119,10 @@ export default function InsuranceImportPage() {
       console.log('第一階段測試完成:', testResult)
       
       // 第二階段：結構化萃取摘要（policyInfo + flatFields）
+      // 只有圖片檔案才傳遞 base64，PDF 檔案不傳遞以避免格式錯誤
       const summary = await openaiService.summarizeInsurancePolicy(
         fileData.text || '',
-        fileData.base64
+        fileData.type === 'image' ? fileData.base64 : null
       )
       console.log('AI 摘要結果:', summary)
 
