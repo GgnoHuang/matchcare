@@ -114,8 +114,8 @@ export default function EditInsurancePage({ params }: { params: Promise<{ id: st
         beneficiary: policyInfo.beneficiary || "",
       })
 
-      // 填入保障項目
-      const coverage = foundPolicy.policyInfo?.coverageDetails?.coverage || []
+      // 填入保障項目 - 優先使用新的 coverage 欄位
+      const coverage = foundPolicy.coverage || foundPolicy.policyInfo?.coverageDetails?.coverage || []
       const coverageData = coverage.map((item: any, index: number) => ({
         id: (index + 1).toString(),
         name: item.name || "",
@@ -128,6 +128,7 @@ export default function EditInsurancePage({ params }: { params: Promise<{ id: st
         coverageData.push({ id: "1", name: "", amount: "", unit: "元" })
       }
       
+      console.log('載入的保障範圍:', coverageData)
       setCoverageItems(coverageData)
       
     } catch (error) {
@@ -160,15 +161,33 @@ export default function EditInsurancePage({ params }: { params: Promise<{ id: st
     }
 
     try {
-      // 準備 Supabase 更新資料格式
+      // 準備保障範圍 - 同時更新 JSONB 和字串格式
+      const coverageArray = coverageItems
+        .filter(item => item.name && item.amount)
+        .map(item => ({
+          name: item.name,
+          amount: item.amount,
+          unit: item.unit
+        }))
+      
+      const policyTerms = coverageItems
+        .filter(item => item.name && item.amount)
+        .map(item => `${item.name} ${item.amount}${item.unit}`)
+        .join(', ')
+
+      // 準備 Supabase 更新資料格式 (完整的一整包)
       const updateData = {
         policy_basic_insurance_company: formData.company,
         policy_basic_policy_number: formData.policyNumber,
         policy_basic_effective_date: formData.startDate,
+        coverage_items: coverageArray,  // JSONB 格式
+        policy_basic_policy_terms: policyTerms,  // 字串格式
         policy_basic_insurance_period: formData.startDate && formData.endDate ? `${formData.startDate} 至 ${formData.endDate}` : '',
         insured_name: formData.insuredPerson,
         beneficiary_name: formData.beneficiary
       }
+
+      console.log('保單更新資料:', updateData)
 
       // 更新 Supabase 中的保單
       const result = await updatePolicy(policy.id, updateData)
@@ -195,7 +214,24 @@ export default function EditInsurancePage({ params }: { params: Promise<{ id: st
 
     if (confirm("確定要刪除此保單嗎？此操作無法復原。")) {
       try {
-        await userDataService.deleteInsurancePolicy(user.id, resolvedParams.id)
+        const { supabaseConfig } = await import('@/lib/supabase')
+        const { baseUrl, apiKey } = supabaseConfig
+        
+        const response = await fetch(
+          `${baseUrl}/insurance_policies?id=eq.${resolvedParams.id}`,
+          {
+            method: "DELETE",
+            headers: {
+              "apikey": apiKey,
+              "Authorization": `Bearer ${apiKey}`,
+            }
+          }
+        )
+
+        if (!response.ok) {
+          throw new Error(`刪除失敗: ${response.status}`)
+        }
+
         console.log("刪除保單:", resolvedParams.id)
         router.push("/insurance")
       } catch (error) {

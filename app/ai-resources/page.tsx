@@ -38,12 +38,15 @@ import {
   ExternalLink,
   Key,
   Upload,
+  Check,
 } from "lucide-react"
 import UploadZone, { UploadedFile } from "@/components/ui/upload-zone"
 import FileSelector, { SelectedFileData } from "@/components/ui/file-selector"
 import { OpenAIService, CaseData, ResourceItem, MedicalAnalysisResult } from "@/lib/openaiService"
 import { checkAuth } from "@/app/actions/auth-service"
 import { userDataService } from "@/lib/storage"
+import { getUserPolicies as getSupabasePolicies, getUserMedicalRecords } from "@/lib/supabaseDataService"
+import { supabaseConfig } from "@/lib/supabase"
 
 function AIResourcesPage() {
   // 主要功能切換狀態
@@ -80,6 +83,11 @@ function AIResourcesPage() {
   const [techniqueDetailsCache, setTechniqueDetailsCache] = useState(new Map())
   const [loadingTechniques, setLoadingTechniques] = useState(new Set())
 
+  // Supabase 病歷資料
+  const [availableMedicalRecords, setAvailableMedicalRecords] = useState<any[]>([])
+  const [isLoadingMedicalRecords, setIsLoadingMedicalRecords] = useState(false)
+  const [selectedMedicalRecordId, setSelectedMedicalRecordId] = useState<string | null>(null)
+
   // 檢查用戶登入狀態並載入API Key
   useEffect(() => {
     const fetchUser = async () => {
@@ -87,11 +95,6 @@ function AIResourcesPage() {
         const { isLoggedIn, user } = await checkAuth()
         if (isLoggedIn && user) {
           setUser(user)
-          // 從環境變數讀取 OpenAI API Key
-          const envApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
-          if (envApiKey) {
-            setApiKey(envApiKey)
-          }
         }
       } catch (error) {
         console.error('獲取用戶資訊失敗:', error)
@@ -99,6 +102,52 @@ function AIResourcesPage() {
     }
     fetchUser()
   }, [])
+
+  // 當用戶登入後載入病歷資料
+  useEffect(() => {
+    if (user?.phoneNumber) {
+      loadUserMedicalRecords()
+    }
+  }, [user])
+
+  // 載入用戶病歷資料（與病歷管理頁面相同的邏輯）
+  const loadUserMedicalRecords = async () => {
+    if (!user?.phoneNumber) return
+
+    setIsLoadingMedicalRecords(true)
+    try {
+      console.log('載入用戶病歷資料，用戶電話:', user.phoneNumber)
+      
+      // 透過 Supabase API 搜尋用戶資料（與病歷管理頁面相同）
+      const apiUrl = `${supabaseConfig.baseUrl}/users_basic?select=*,medical_records(*)&phonenumber=eq.${user.phoneNumber}`
+      const response = await fetch(apiUrl, {
+        headers: {
+          'apikey': supabaseConfig.apiKey,
+          'Authorization': `Bearer ${supabaseConfig.apiKey}`
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`API 請求失敗: ${response.status}`)
+      }
+      
+      const userData = await response.json()
+      console.log('AI比對頁面 - API 返回用戶資料:', userData)
+      
+      // 提取病歷記錄
+      const rawRecords = userData[0]?.medical_records || []
+      console.log('AI比對頁面 - 提取的病歷記錄:', rawRecords)
+      
+      // 將原始病歷記錄直接存儲，供選擇使用
+      setAvailableMedicalRecords(rawRecords)
+      console.log('AI比對頁面 - 病歷載入成功:', rawRecords.length, '筆')
+    } catch (error) {
+      console.error('載入病歷資料失敗:', error)
+      setAvailableMedicalRecords([])
+    } finally {
+      setIsLoadingMedicalRecords(false)
+    }
+  }
 
   // 已移除模擬分析進度 - 改用真實AI分析進度
 
@@ -128,199 +177,164 @@ function AIResourcesPage() {
     const storedApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
     console.log("API Key 存在:", !!storedApiKey)
     console.log("選擇的病歷檔案:", selectedMedicalFile)
-    console.log("選擇的保單檔案:", selectedPolicyFile)
     if (!storedApiKey) {
       setError("未設定 OpenAI API Key 環境變數")
       setIsAnalyzing(false)
       return
     }
 
-    // 保單必填
-    if (!selectedPolicyFile) {
-      setError("請先選擇或上傳保險保單文件")
-      setIsAnalyzing(false)
-      return
-    }
-
-    // 病歷和診斷證明至少一項必填
-    if (!selectedMedicalFile && !selectedDiagnosisFile) {
-      setError("請至少選擇或上傳病歷記錄或診斷證明其中一項")
+    // 病歷必填
+    if (!selectedMedicalFile && !selectedMedicalRecordId) {
+      setError("請選擇一張病歷文件")
       setIsAnalyzing(false)
       return
     }
 
     try {
       const openaiService = new OpenAIService(storedApiKey)
-      let medicalText = ''
-      let policyText = ''
 
-      // 首先讀取已保存的醫療資料
-      const [savedMedicalRecords, savedDiagnosisCertificates] = await Promise.all([
-        userDataService.getMedicalRecords(user?.id || ''),
-        userDataService.getDiagnosisCertificates(user?.id || '')
-      ])
-
-      console.log('📊 讀取已保存的醫療資料:')
-      console.log(`- 病歷記錄: ${savedMedicalRecords.length} 筆`)
-      console.log(`- 診斷證明: ${savedDiagnosisCertificates.length} 筆`)
-
-      // 整合已保存的醫療資料
-      let combinedMedicalData = ''
-      
-      if (savedMedicalRecords.length > 0) {
-        combinedMedicalData += '=== 已保存的病歷記錄 ===\n'
-        savedMedicalRecords.forEach((record, index) => {
-          const medicalInfo = (record.medicalInfo as any) || {}
-          combinedMedicalData += `病歷 ${index + 1}:\n`
-          combinedMedicalData += `- 病症: ${medicalInfo.clinicalRecord || medicalInfo._originalData?.diagnosis || '未知'}\n`
-          combinedMedicalData += `- 診斷: ${medicalInfo.clinicalRecord || medicalInfo._originalData?.diagnosis || '未知'}\n`
-          combinedMedicalData += `- 就醫日期: ${medicalInfo._originalData?.visitDate || record.uploadDate || '未知'}\n`
-          combinedMedicalData += `- 醫院: ${medicalInfo.hospitalStamp || medicalInfo._originalData?.hospital || '未知'}\n`
-          if (medicalInfo.medicationRecord || medicalInfo._originalData?.medication) {
-            combinedMedicalData += `- 用藥: ${medicalInfo.medicationRecord || medicalInfo._originalData?.medication}\n`
-          }
-          combinedMedicalData += '\n'
-        })
-      }
-
-      if (savedDiagnosisCertificates.length > 0) {
-        combinedMedicalData += '=== 已保存的診斷證明 ===\n'
-        savedDiagnosisCertificates.forEach((cert, index) => {
-          const diagnosisInfo = (cert.diagnosisInfo as any) || {}
-          combinedMedicalData += `診斷證明 ${index + 1}:\n`
-          combinedMedicalData += `- 主診斷: ${diagnosisInfo.diseaseName || diagnosisInfo._originalData?.diseaseName || '未知'}\n`
-          combinedMedicalData += `- 診斷日期: ${diagnosisInfo.certificateDate || diagnosisInfo._originalData?.certificateDate || '未知'}\n`
-          combinedMedicalData += `- 醫師: ${diagnosisInfo._originalData?.doctor || '未知'}\n`
-          combinedMedicalData += `- 醫院: ${diagnosisInfo._originalData?.hospital || '未知'}\n`
-          if (diagnosisInfo.treatmentSummary || diagnosisInfo._originalData?.treatmentSummary) {
-            combinedMedicalData += `- 治療計劃: ${diagnosisInfo.treatmentSummary || diagnosisInfo._originalData?.treatmentSummary}\n`
-          }
-          combinedMedicalData += '\n'
-        })
-      }
-
-      // 提取新上傳文件的病例文字
-      if (selectedMedicalFile) {
-        if (selectedMedicalFile.fileType === 'pdf' && selectedMedicalFile.textContent) {
-          medicalText = selectedMedicalFile.textContent
-        } else if (selectedMedicalFile.fileType === 'image') {
-          medicalText = "請從圖片中分析醫療內容"
-        }
-      }
-
-      // 提取保單文字
-      if (selectedPolicyFile) {
-        if (selectedPolicyFile.fileType === 'pdf' && selectedPolicyFile.textContent) {
-          policyText = selectedPolicyFile.textContent
-        } else if (selectedPolicyFile.fileType === 'image') {
-          policyText = "請從保單圖片中分析保障內容"
-        }
-      }
-
-      // 提取診斷證明文字
-      let diagnosisText = ''
-      if (selectedDiagnosisFile) {
-        if (selectedDiagnosisFile.fileType === 'pdf' && selectedDiagnosisFile.textContent) {
-          diagnosisText = selectedDiagnosisFile.textContent
-        } else if (selectedDiagnosisFile.fileType === 'image') {
-          diagnosisText = "請從診斷證明圖片中分析診斷資訊"
-        }
-      }
-
-      // 模擬案例資料（實際應用中可以從表單獲取）
-      const caseData: CaseData = {
-        age: "未指定",
-        gender: "未指定", 
-        disease: "依據上傳文件分析",
-        treatment: "依據上傳文件分析",
-        notes: "透過 AI 自動分析上傳的醫療文件"
-      }
-
-      console.log("第1步：基礎病例分析...")
+      console.log("第1步：載入用戶保單資料...")
       setAnalysisProgress(20)
-      const medicalImageBase64 = (selectedMedicalFile && selectedMedicalFile.fileType === 'image') ? selectedMedicalFile.imageBase64 : null
       
-      // 合併所有醫療文字內容（已保存資料 + 新上傳文件）
-      let finalMedicalText = combinedMedicalData
-
-      // 添加新上傳的病歷文件
-      if (medicalText) {
-        finalMedicalText += '\n=== 新上傳的病歷文件 ===\n' + medicalText
+      // 載入用戶所有保單
+      console.log('當前用戶資訊:', user)
+      if (!user?.phoneNumber) {
+        setError("無法取得用戶資訊，請重新登入")
+        setIsAnalyzing(false)
+        return
       }
 
-      // 添加新上傳的診斷證明
-      if (diagnosisText) {
-        finalMedicalText += '\n=== 新上傳的診斷證明 ===\n' + diagnosisText
+      console.log('正在載入保單，電話號碼:', user.phoneNumber)
+      const policiesResult = await getSupabasePolicies(user.phoneNumber)
+      console.log('保單載入結果:', JSON.stringify(policiesResult, null, 2))
+      
+      // 檢查是否是 API 調用失敗
+      if (policiesResult && !policiesResult.success) {
+        setError(`載入保單失敗: ${policiesResult.error || '未知錯誤'}`)
+        setIsAnalyzing(false)
+        return
       }
       
-      // 如果完全沒有醫療資料，提供基本提示
-      if (!finalMedicalText.trim() || finalMedicalText === '') {
-        finalMedicalText = "請根據上傳的醫療文件圖片進行分析。如果沒有具體的醫療內容，請基於常見的醫療情況提供一般性的資源建議。"
-      }
-      
-      // 確保有足夠的內容供 AI 分析
-      if (finalMedicalText.length < 50) {
-        finalMedicalText += "\n\n請基於以上資訊和您對台灣醫療體系的了解，提供相關的醫療資源建議。"
+      // 檢查是否返回的是空陣列（表示沒有保單）
+      if (!policiesResult || !policiesResult.policies || policiesResult.policies.length === 0) {
+        setError("您尚未上傳任何保單，請先到保單管理頁面上傳保單")
+        setIsAnalyzing(false)
+        return
       }
 
-      console.log('🔄 整合的醫療資料長度:', finalMedicalText.length)
+      console.log(`✅ 載入了 ${policiesResult.policies.length} 張保單`)
       
-      // 等待 OpenAI 分析病例（使用整合的醫療資料）
-      const medicalAnalysis = await openaiService.analyzeMedicalCase(finalMedicalText, caseData, medicalImageBase64)
-      console.log("病例分析結果:", medicalAnalysis)
-
-      console.log("第2步：搜尋政府補助資源...")
+      console.log("第2步：準備病歷資料...")
       setAnalysisProgress(40)
-      // 等待 OpenAI 搜尋政府補助
-      const govResources = await openaiService.searchGovernmentSubsidies(medicalAnalysis)
-      console.log("政府補助資源:", govResources)
+      
+      // 準備選中的病歷資料
+      let selectedMedicalRecord: any
 
-      console.log("第3步：搜尋企業福利資源...")
+      if (selectedMedicalRecordId) {
+        // 使用 Supabase 的病歷資料
+        const medicalRecord = availableMedicalRecords.find(record => record.id === selectedMedicalRecordId)
+        if (!medicalRecord) {
+          setError("找不到選中的病歷記錄")
+          setIsAnalyzing(false)
+          return
+        }
+
+        selectedMedicalRecord = {
+          fileName: medicalRecord.file_name || `病歷_${medicalRecord.id}`,
+          recordData: {
+            diagnosis: medicalRecord.medical_data?.diagnosis || '診斷處理中',
+            treatment: medicalRecord.medical_data?.treatment || '治療記錄處理中',
+            symptoms: medicalRecord.medical_data?.symptoms || medicalRecord.medical_data?.chiefComplaint || '症狀記錄處理中',
+            visitDate: medicalRecord.medical_data?.visitDate || medicalRecord.upload_date,
+            hospitalName: medicalRecord.medical_data?.hospitalName || '未知醫院'
+          },
+          textContent: medicalRecord.text_content || '',
+          originalData: medicalRecord
+        }
+        
+        console.log('使用 Supabase 病歷:', selectedMedicalRecord)
+      } else if (selectedMedicalFile) {
+        // 使用新上傳的文件
+        selectedMedicalRecord = {
+          fileName: selectedMedicalFile.fileName || 'selected-medical.txt',
+          recordData: {}
+        }
+
+        // 從選中的文件中提取內容
+        if (selectedMedicalFile.fileType === 'pdf' && selectedMedicalFile.textContent) {
+          selectedMedicalRecord.textContent = selectedMedicalFile.textContent
+          selectedMedicalRecord.recordData = {
+            diagnosis: selectedMedicalFile.textContent.substring(0, 100) + "...",
+            treatment: "依據病歷內容分析",
+            symptoms: "依據病歷內容分析"
+          }
+        } else if (selectedMedicalFile.fileType === 'image') {
+          selectedMedicalRecord.recordData = {
+            diagnosis: "請從圖片中分析診斷",
+            treatment: "請從圖片中分析治療方案", 
+            symptoms: "請從圖片中分析症狀"
+          }
+          selectedMedicalRecord.imageBase64 = selectedMedicalFile.imageBase64
+        }
+      }
+
+      console.log("第3步：提取病歷關鍵資訊...")
+      setAnalysisProgress(40)
+      
+      // 從病歷中提取搜尋關鍵詞
+      const searchTerm = selectedMedicalRecord.recordData?.diagnosis || 
+                        selectedMedicalRecord.recordData?.symptoms || 
+                        "醫療保險理賠"
+
+      console.log("第4步：綜合搜尋保單匹配...")
       setAnalysisProgress(60)
-      // 等待 OpenAI 搜尋企業福利
-      const corpResources = await openaiService.searchCorporateBenefits(medicalAnalysis)
-      console.log("企業福利資源:", corpResources)
+      
+      // 使用原本的 comprehensiveSearch 方法
+      const comprehensiveResults = await openaiService.comprehensiveSearch(
+        searchTerm,
+        policiesResult.policies, 
+        [selectedMedicalRecord]
+      )
 
-      console.log("第4步：分析保單理賠資源...")
+      console.log(`✅ 綜合搜尋完成`)
+      console.log('個人保單匹配結果:', comprehensiveResults.personalPolicyResults)
+      console.log('網路資源:', comprehensiveResults.networkResources)
+
+      console.log("第5步：整理所有結果...")
       setAnalysisProgress(80)
-      const policyImageBase64 = (selectedPolicyFile && selectedPolicyFile.fileType === 'image') ? selectedPolicyFile.imageBase64 : null
-      // 等待 OpenAI 分析保單理賠
-      const insResources = await openaiService.analyzeInsuranceClaims(medicalAnalysis, policyText, policyImageBase64)
-      console.log("保單理賠資源:", insResources)
-
-      console.log("第5步：整合所有結果...")
-      setAnalysisProgress(90)
-      const allResources = [...govResources, ...corpResources, ...insResources]
+      
+      const allResources = [
+        ...comprehensiveResults.personalPolicyResults,
+        ...comprehensiveResults.networkResources
+      ]
+      
       setAiGeneratedResources(allResources)
 
       // 生成分析報告
       const analysisReport = `## 🔍 AI 綜合分析報告
 
-### 資料來源整合
-- **已保存病歷記錄**: ${savedMedicalRecords.length} 筆
-- **已保存診斷證明**: ${savedDiagnosisCertificates.length} 筆
-- **新上傳病歷文件**: ${medicalText ? '1 筆' : '0 筆'}
-- **新上傳診斷證明**: ${diagnosisText ? '1 筆' : '0 筆'}
-- **總醫療資料量**: ${finalMedicalText.length} 字元
-
-### 病例分析結果
-- **主要疾病**: ${medicalAnalysis.disease}
-- **嚴重程度**: ${medicalAnalysis.severity}
-- **治療階段**: ${medicalAnalysis.treatmentStage}
-- **預估費用**: ${medicalAnalysis.estimatedCost}
-- **照護需求**: ${medicalAnalysis.careNeeds}
-- **家庭影響**: ${medicalAnalysis.familyImpact}
+### 分析概況
+- **分析病歷文件**: ${selectedMedicalRecord.fileName}
+- **載入保單數量**: ${policiesResult.policies.length} 張
+- **搜尋關鍵詞**: ${searchTerm}
+- **分析模式**: 病歷與保單智能匹配
 
 ### 資源搜尋結果
-- **政府補助資源**: ${govResources.length} 項
-- **企業福利資源**: ${corpResources.length} 項
-- **保單理賠資源**: ${insResources.length} 項
+- **個人保單匹配**: ${comprehensiveResults.personalPolicyResults.length} 項
+- **網路醫療資源**: ${comprehensiveResults.networkResources.length} 項
 - **總計可用資源**: ${allResources.length} 項
+
+### 費用估算
+- **預估費用**: ${comprehensiveResults.estimatedCost}
+- **費用來源**: ${comprehensiveResults.costSource}
 
 ### 建議優先級
 ${allResources.filter(r => r.priority === 'high').length > 0 ? 
   `**高優先級**: ${allResources.filter(r => r.priority === 'high').map(r => r.title).join('、')}` : 
-  '無高優先級資源'}
+  '無高優先級項目'}
+
+### 分析說明
+AI 已成功分析您的病歷文件，並與所有保單和醫療資源進行智能比對。建議您優先處理高優先級的項目。
 
 請查看下方詳細的資源清單和申請指引。`
 
@@ -819,7 +833,7 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">一鍵AI找保障</h1>
-          <p className="text-gray-500 mt-1 text-sm md:text-base">智能分析您的病歷，匹配各類可申請的補助與理賠資源</p>
+          <p className="text-gray-500 mt-1 text-sm md:text-base">智能分析您的病歷，自動匹配所有保單的理賠機會</p>
         </div>
       </div>
 
@@ -863,35 +877,69 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                 <div className="space-y-4">
                   
 
-                  {/* 病歷檔案選擇區域 */}
-                  <FileSelector
-                    label="病歷文件選擇（擇一必填）"
-                    description="選擇已上傳的病歷或醫療文件，或上傳新檔案（與診斷證明至少選一項）"
-                    fileType="medical"
-                    userId={user?.id || null}
-                    onFileSelected={handleMedicalFileSelected}
-                    onError={handleFileError}
-                  />
-
-                  {/* 保單檔案選擇區域 */}
-                  <FileSelector
-                    label="保單文件選擇（必填）"
-                    description="選擇已上傳的保單文件或上傳新檔案，進行保單理賠分析"
-                    fileType="insurance"
-                    userId={user?.id || null}
-                    onFileSelected={handlePolicyFileSelected}
-                    onError={handleFileError}
-                  />
-
-                  {/* 診斷證明選擇區域 */}
-                  <FileSelector
-                    label="診斷證明選擇（擇一必填）"
-                    description="選擇已上傳的診斷證明或上傳新檔案（與病歷記錄至少選一項）"
-                    fileType="diagnosis"
-                    userId={user?.id || null}
-                    onFileSelected={handleDiagnosisFileSelected}
-                    onError={handleFileError}
-                  />
+                  {/* 病歷選擇區域 */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">病歷文件選擇（限選一張）</CardTitle>
+                      <CardDescription>
+                        選擇一張已上傳的病歷或醫療文件，AI 將自動與您所有的保單進行智能匹配分析
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {isLoadingMedicalRecords ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                          <span className="ml-2 text-sm text-gray-500">載入病歷資料中...</span>
+                        </div>
+                      ) : availableMedicalRecords.length > 0 ? (
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {availableMedicalRecords.map((record) => (
+                            <Card 
+                              key={record.id} 
+                              className={`cursor-pointer transition-all ${
+                                selectedMedicalRecordId === record.id 
+                                  ? 'ring-2 ring-blue-500 bg-blue-50' 
+                                  : 'hover:shadow-md'
+                              }`}
+                              onClick={() => setSelectedMedicalRecordId(record.id)}
+                            >
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <h4 className="font-medium text-sm">
+                                      {record.file_name || `病歷 ${record.id}`}
+                                    </h4>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      診斷: {record.medical_data?.diagnosis || '處理中'} | 
+                                      醫院: {record.medical_data?.hospitalName || '未知醫院'} | 
+                                      日期: {record.upload_date ? new Date(record.upload_date).toLocaleDateString('zh-TW') : '未知'}
+                                    </p>
+                                  </div>
+                                  {selectedMedicalRecordId === record.id && (
+                                    <Check className="h-5 w-5 text-blue-600" />
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <FileSearch className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                          <h3 className="text-lg font-medium mb-2">尚未上傳病歷資料</h3>
+                          <p className="text-gray-500 mb-4">
+                            請先到病歷管理頁面上傳您的病歷文件
+                          </p>
+                          <Link href="/medical-records/import">
+                            <Button className="gap-2">
+                              <Upload className="h-4 w-4" />
+                              前往上傳病歷
+                            </Button>
+                          </Link>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
               
 
@@ -909,10 +957,10 @@ ${allResources.filter(r => r.priority === 'high').length > 0 ?
                 <Button 
                   onClick={startAnalysis} 
                   className="gap-2 bg-blue-600 hover:bg-blue-700"
-                  disabled={!selectedPolicyFile || (!selectedMedicalFile && !selectedDiagnosisFile)}
+                  disabled={!selectedMedicalFile && !selectedMedicalRecordId}
                 >
                   <Brain className="h-4 w-4" />
-                  開始AI資源分析
+                  開始AI保單智能匹配
                 </Button>
               </div>
             </div>

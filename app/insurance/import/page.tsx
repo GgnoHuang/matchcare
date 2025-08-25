@@ -248,6 +248,14 @@ export default function InsuranceImportPage() {
           policy_basic_insurance_company: formData.company,
           policy_basic_policy_number: formData.number,
           policy_basic_effective_date: formData.startDate || null,
+          // 保障範圍 - 同時儲存 JSONB 和字串格式
+          coverage_items: coverageItems
+            .filter(item => item.name && item.amount)
+            .map(item => ({
+              name: item.name,
+              amount: item.amount,
+              unit: item.unit
+            })),
           policy_basic_policy_terms: coverageItems
             .filter(item => item.name && item.amount)
             .map(item => `${item.name} ${item.amount}${item.unit}`)
@@ -375,7 +383,24 @@ export default function InsuranceImportPage() {
           policy_basic_insurance_company: analysisResult.flatFields?.company || analysisResult.policyInfo?.policyBasicInfo?.insuranceCompany || '',
           policy_basic_policy_number: analysisResult.flatFields?.number || analysisResult.policyInfo?.policyBasicInfo?.policyNumber || '',
           policy_basic_effective_date: (analysisResult.flatFields?.startDate || analysisResult.policyInfo?.policyBasicInfo?.effectiveDate) || null,
-          policy_basic_policy_terms: analysisResult.policyInfo?.policyBasicInfo?.policyTerms || '',
+          
+          // 處理保障範圍 - 同時儲存 JSONB 和字串格式
+          coverage_items: (() => {
+            const coverage = analysisResult.flatFields?.coverage || analysisResult.policyInfo?.coverageDetails?.coverage || []
+            return Array.isArray(coverage) ? coverage : []
+          })(),
+          policy_basic_policy_terms: (() => {
+            const coverage = analysisResult.flatFields?.coverage || analysisResult.policyInfo?.coverageDetails?.coverage || []
+            if (Array.isArray(coverage) && coverage.length > 0) {
+              // 轉換為字串格式：項目名稱 金額單位
+              return coverage
+                .filter(item => item.name && item.amount)
+                .map(item => `${item.name} ${item.amount}${item.unit || ''}`)
+                .join(', ')
+            }
+            // 如果沒有 coverage 陣列，使用原本的 policyTerms
+            return analysisResult.policyInfo?.policyBasicInfo?.policyTerms || ''
+          })(),
           policy_basic_insurance_period: (() => {
             const startDate = analysisResult.flatFields?.startDate || analysisResult.policyInfo?.policyBasicInfo?.effectiveDate || ''
             const endDate = analysisResult.flatFields?.endDate || analysisResult.policyInfo?.policyBasicInfo?.expiryDate || ''

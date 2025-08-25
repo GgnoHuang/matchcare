@@ -88,6 +88,7 @@ export default function MedicalRecordsPage() {
         const department = medicalData.department || '醫療科別'
         const doctor = medicalData.doctorName || '主治醫師'
         const visitDate = medicalData.visitDate || record.upload_date
+
         
         return {
           id: record.id || `record_${index + 1}`,
@@ -385,7 +386,7 @@ export default function MedicalRecordsPage() {
           </Link> */}
         </div>
       </div>
-
+{/* 
       <Alert className="mb-6">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>提示</AlertTitle>
@@ -395,7 +396,7 @@ export default function MedicalRecordsPage() {
             前往衛服部健康存摺
           </Link>
         </AlertDescription>
-      </Alert>
+      </Alert> */}
 
       <div className="space-y-4">
             {displayRecords.length > 0 ? (
@@ -407,7 +408,9 @@ export default function MedicalRecordsPage() {
                       <CardTitle className="flex flex-wrap items-center gap-2 text-lg md:text-xl">
                         {record.hospital} - {record.department}
                       </CardTitle>
-                      <CardDescription>{record.date}</CardDescription>
+                      <CardDescription>
+                        就診日期：{record.date} | 上傳日期：{new Date(record.uploadDate).toLocaleDateString('zh-TW')}
+                      </CardDescription>
                     </div>
                     <div className="flex gap-2 w-full md:w-auto">
                       <Link href={`/medical-records/${record.id}`} className="flex-1 md:flex-initial">
@@ -460,7 +463,7 @@ export default function MedicalRecordsPage() {
                           count={record.matchedPolicies}
                           policies={record.matchedPoliciesDetails}
                         />
-                        <Badge
+                        {/* <Badge
                           variant="outline"
                           className={`bg-white ${
                             record.claimSuccessRate >= 90
@@ -471,7 +474,7 @@ export default function MedicalRecordsPage() {
                           }`}
                         >
                           理賠成功率: {record.claimSuccessRate}%
-                        </Badge>
+                        </Badge> */}
                       </>
                     )}
                   </div>
