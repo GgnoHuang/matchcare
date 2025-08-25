@@ -72,6 +72,7 @@ export async function getUserPolicies(phoneNumber: string) {
       return {
         id: policy.id,
         fileName: policy.file_name,
+        policyName: policy.policy_name,  // 新增 policy_name 欄位
         documentType: policy.document_type,
         uploadDate: policy.upload_date,
         textContent: policy.text_content,
@@ -185,7 +186,9 @@ export async function updatePolicy(policyId: string, updateData: any) {
     )
 
     if (!response.ok) {
-      throw new Error(`更新保單失敗: ${response.status}`)
+      const errorText = await response.text()
+      console.error('Supabase 更新錯誤詳情:', errorText)
+      throw new Error(`更新保單失敗: ${response.status} - ${errorText}`)
     }
 
     const updatedPolicy = await response.json()

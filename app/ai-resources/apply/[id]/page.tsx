@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,14 +28,15 @@ import {
   FileText,
 } from "lucide-react"
 
-export default function ResourceApplyPage({ params }) {
+export default function ResourceApplyPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params)
   const [step, setStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
 
   // 模擬資源數據
   const resource = {
-    id: params.id,
+    id: resolvedParams.id,
     category: "政府補助",
     subcategory: "國家級",
     title: "重大傷病醫療補助",
@@ -93,7 +94,7 @@ export default function ResourceApplyPage({ params }) {
   return (
     <div className="container py-8">
       <div className="mb-6">
-        <Link href={`/ai-resources/${params.id}`}>
+        <Link href={`/ai-resources/${resolvedParams.id}`}>
           <Button variant="ghost" size="sm" className="gap-1">
             <ChevronLeft className="h-4 w-4" />
             返回資源詳情

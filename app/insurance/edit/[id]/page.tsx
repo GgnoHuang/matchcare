@@ -106,7 +106,7 @@ export default function EditInsurancePage({ params }: { params: Promise<{ id: st
       setFormData({
         company: policyInfo.insuranceCompany || "",
         policyType: policyInfo.policyType || "",
-        policyName: policyInfo.policyName || "",
+        policyName: foundPolicy.policyName || foundPolicy.fileName || policyInfo.policyName || "",
         policyNumber: policyInfo.policyNumber || "",
         startDate: policyInfo.effectiveDate || "",
         endDate: policyInfo.expirationDate || "",
@@ -177,14 +177,16 @@ export default function EditInsurancePage({ params }: { params: Promise<{ id: st
 
       // 準備 Supabase 更新資料格式 (完整的一整包)
       const updateData = {
-        policy_basic_insurance_company: formData.company,
-        policy_basic_policy_number: formData.policyNumber,
-        policy_basic_effective_date: formData.startDate,
+        policy_basic_insurance_company: formData.company || null,
+        policy_basic_policy_number: formData.policyNumber || null,
+        policy_basic_effective_date: formData.startDate || null,
+        policy_name: formData.policyName || '未命名保單',
         coverage_items: coverageArray,  // JSONB 格式
-        policy_basic_policy_terms: policyTerms,  // 字串格式
-        policy_basic_insurance_period: formData.startDate && formData.endDate ? `${formData.startDate} 至 ${formData.endDate}` : '',
-        insured_name: formData.insuredPerson,
-        beneficiary_name: formData.beneficiary
+        policy_basic_policy_terms: policyTerms || null,
+        policy_basic_insurance_period: formData.startDate && formData.endDate ? `${formData.startDate} 至 ${formData.endDate}` : null,
+        insured_name: formData.insuredPerson || null,
+        beneficiary_name: formData.beneficiary || null,
+        updated_at: new Date().toISOString()
       }
 
       console.log('保單更新資料:', updateData)

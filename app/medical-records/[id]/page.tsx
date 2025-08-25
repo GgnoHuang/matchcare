@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useState, useEffect, use } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -34,10 +34,10 @@ interface MedicalRecord {
   }
 }
 
-export default function MedicalRecordDetailPage() {
+export default function MedicalRecordDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
-  const params = useParams()
-  const recordId = params.id as string
+  const resolvedParams = use(params)
+  const recordId = resolvedParams.id
   
   const [record, setRecord] = useState<MedicalRecord | null>(null)
   const [user, setUser] = useState<{ id: string, username: string, phoneNumber: string } | null>(null)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,7 +28,8 @@ import {
   ExternalLink,
 } from "lucide-react"
 
-export default function ResourceDetailPage({ params }) {
+export default function ResourceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params)
   const [resource, setResource] = useState(null)
   const [loading, setLoading] = useState(true)
   const [detailedAnalysis, setDetailedAnalysis] = useState(null)
@@ -58,14 +59,14 @@ export default function ResourceDetailPage({ params }) {
           }
           
           // 查找匹配的資源
-          console.log('🔍 開始查找資源 ID:', params.id)
+          console.log('🔍 開始查找資源 ID:', resolvedParams.id)
           for (const result of results) {
             if (result && result.matchedResources && Array.isArray(result.matchedResources)) {
               console.log('📋 檢查搜尋結果:', result.name)
               console.log('📊 匹配資源數量:', result.matchedResources.length)
               console.log('🆔 所有資源 ID:', result.matchedResources.map(r => r.id))
               
-              const foundResource = result.matchedResources.find(r => r && r.id === params.id)
+              const foundResource = result.matchedResources.find(r => r && r.id === resolvedParams.id)
               if (foundResource) {
                 console.log('找到匹配的資源:', foundResource)
                 // 補充詳細資訊
@@ -98,26 +99,26 @@ export default function ResourceDetailPage({ params }) {
         }
 
         // 如果沒有從搜尋結果找到，嘗試生成基於ID的預設資料
-        console.log('❌ 未找到搜尋結果，嘗試解析ID並生成相應資料:', params.id)
+        console.log('❌ 未找到搜尋結果，嘗試解析ID並生成相應資料:', resolvedParams.id)
         
         // 檢查是否是已知的ID格式，嘗試生成對應的測試資料
-        if (params.id?.includes('government-') || params.id?.includes('financial-') || params.id?.includes('charity-')) {
+        if (resolvedParams.id?.includes('government-') || resolvedParams.id?.includes('financial-') || resolvedParams.id?.includes('charity-')) {
           console.log('🔧 檢測到AI搜尋ID，生成對應的測試資料')
-          setResource(generateTestResourceFromId(params.id))
+          setResource(generateTestResourceFromId(resolvedParams.id))
         } else {
           console.log('🔧 使用通用預設資源')
-          setResource(generateDefaultResource(params.id))
+          setResource(generateDefaultResource(resolvedParams.id))
         }
         setLoading(false)
       } catch (error) {
         console.error('載入資源資料失敗:', error)
-        setResource(generateDefaultResource(params.id))
+        setResource(generateDefaultResource(resolvedParams.id))
         setLoading(false)
       }
     }
 
     loadResourceData()
-  }, [params.id])
+  }, [resolvedParams.id])
 
   // 載入詳細AI分析
   const loadDetailedAnalysis = async (resourceData, searchTerm) => {

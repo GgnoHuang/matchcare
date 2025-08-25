@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -19,7 +19,9 @@ import { cn } from "@/lib/utils"
 import { checkAuth } from "@/app/actions/auth-service"
 import { supabaseConfig } from "@/lib/supabase"
 
-export default function EditMedicalRecordPage({ params }: { params: { id: string } }) {
+export default function EditMedicalRecordPage({ params }: { params: Promise<{ id: string }> }) {
+  // Unwrap params Promise outside of try/catch
+  const resolvedParams = use(params)
   const router = useRouter()
   const [record, setRecord] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -63,7 +65,7 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
         
         // 載入病歷資料
         if (currentUser) {
-          await loadMedicalRecord(currentUser.phoneNumber, params.id)
+          await loadMedicalRecord(currentUser.phoneNumber, resolvedParams.id)
         }
         
       } catch (error) {
@@ -75,7 +77,7 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
     }
     
     initializePage()
-  }, [params.id])
+  }, [resolvedParams.id])
 
   const loadMedicalRecord = async (phoneNumber: string, recordId: string) => {
     try {
@@ -223,7 +225,7 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
     if (confirm("確定要刪除此病歷記錄嗎？此操作無法復原。")) {
       try {
         // 透過 Supabase API 刪除病歷
-        const deleteUrl = `${supabaseConfig.baseUrl}/medical_records?id=eq.${params.id}`
+        const deleteUrl = `${supabaseConfig.baseUrl}/medical_records?id=eq.${resolvedParams.id}`
         const response = await fetch(deleteUrl, {
           method: 'DELETE',
           headers: {
@@ -236,7 +238,7 @@ export default function EditMedicalRecordPage({ params }: { params: { id: string
           throw new Error(`刪除失敗: ${response.status}`)
         }
         
-        console.log("刪除病歷:", params.id)
+        console.log("刪除病歷:", resolvedParams.id)
         router.push("/medical-records")
       } catch (error) {
         console.error('刪除失敗:', error)

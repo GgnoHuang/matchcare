@@ -141,8 +141,8 @@ export default function InsuranceImportPage() {
       console.log('AI 分析整合結果:', result)
       
       setAnalysisResult(result)
-      // 添加到批次列表
-      setAllAnalysisResults(prev => [...prev, result])
+      // 添加到批次列表，包含檔案資訊
+      setAllAnalysisResults(prev => [...prev, { ...result, fileData }])
       setIsComplete(true)
     } catch (error) {
       console.error('Error analyzing policy:', error)
@@ -371,11 +371,11 @@ export default function InsuranceImportPage() {
         },
         body: JSON.stringify({
           user_id: userId,
-          file_name: 'ai_analyzed_policy.pdf',
-          file_type: 'pdf',
+          file_name: analysisResult.fileData?.filename || 'ai_analyzed_policy.pdf',
+          file_type: analysisResult.fileData?.type || 'pdf',
           document_type: 'insurance',
           upload_date: new Date().toISOString(),
-          file_size: 0,
+          file_size: analysisResult.fileData?.size || 0,
           text_content: analysisResult.claimConditions || '', // 第一階段的理賠條件列點
           image_base64: '',
           notes: 'AI自動分析上傳',
@@ -408,6 +408,8 @@ export default function InsuranceImportPage() {
             return startDate && endDate ? `${startDate} 至 ${endDate}` : ''
           })(),
           
+          // 保單名稱 (AI分析結果)
+          policy_name: analysisResult.flatFields?.name || analysisResult.policyInfo?.policyBasicInfo?.policyName || '',
           // 被保險人資訊
           insured_name: analysisResult.flatFields?.insuredName || analysisResult.policyInfo?.insuredPersonInfo?.name || '',
           // 受益人資訊

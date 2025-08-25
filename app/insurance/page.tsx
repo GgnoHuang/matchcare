@@ -16,6 +16,7 @@ interface InsurancePolicy {
   company: string
   name: string
   type: string
+  policyName?: string // 資料庫的 policy_name 欄位
   policyNumber: string
   startDate?: string
   endDate?: string
@@ -175,6 +176,7 @@ export default function InsurancePage() {
             company: company,
             name: policyName,
             type: policyType,
+            policyName: policy.policyName, // 直接使用資料庫的 policy_name 欄位
             policyNumber: policyNumber,
             startDate: policyData.effectiveDate,
             endDate: policyData.insurancePeriod?.split(' 至 ')[1],
@@ -216,29 +218,10 @@ export default function InsurancePage() {
     return 0;
   }
 
-  // 獲取保單顯示標題（與我的資料頁面邏輯一致）
+  // 獲取保單顯示標題 - 簡化版本，直接使用資料庫的 policy_name
   const getPolicyDisplayTitle = (policy: InsurancePolicy) => {
-    // 從原始資料中獲取AI分析的保單資訊
-    const policyInfo = policy.originalData?.policyInfo?.policyBasicInfo
-    
-    // 優先使用AI識別的保單名稱和類型
-    if (policyInfo?.policyName && policyInfo.policyName !== '待輸入') {
-      if (policyInfo?.policyType && policyInfo.policyType !== '待輸入') {
-        return `${policyInfo.policyName} (${policyInfo.policyType})`
-      }
-      return policyInfo.policyName
-    }
-    
-    // 次選：使用保險公司名稱 + 保險保單
-    if (policyInfo?.insuranceCompany && policyInfo.insuranceCompany !== '待輸入') {
-      const policyTypeText = policyInfo?.policyType && policyInfo.policyType !== '待輸入' 
-        ? policyInfo.policyType 
-        : '保險保單'
-      return `${policyInfo.insuranceCompany} - ${policyTypeText}`
-    }
-    
-    // 最後選項：使用檔案名稱
-    return policy.fileName || '保險保單'
+    // 直接使用資料庫的 policy_name 欄位
+    return policy.policyName || policy.fileName || '保險保單'
   }
 
   // Loading狀態

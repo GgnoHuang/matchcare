@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -11,7 +11,8 @@ import { checkAuth } from "@/app/actions/auth-service"
 import { userDataService } from "@/lib/storage"
 import { OpenAIService } from "@/lib/openaiService"
 
-export default function TreatmentAnalysisPage({ params }) {
+export default function TreatmentAnalysisPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params)
   const [isLoading, setIsLoading] = useState(true)
   const [treatment, setTreatment] = useState(null)
   const [scrolled, setScrolled] = useState(false)
@@ -42,8 +43,8 @@ export default function TreatmentAnalysisPage({ params }) {
         
         setUser(authUser)
         
-        // 解碼搜尋詞（params.id 實際上是編碼後的搜尋詞）
-        const searchTerm = decodeURIComponent(params.id)
+        // 解碼搜尋詞（resolvedParams.id 實際上是編碼後的搜尋詞）
+        const searchTerm = decodeURIComponent(resolvedParams.id)
         console.log('準備分析搜尋詞:', searchTerm)
         
         // 獲取用戶的保單和病歷資料
@@ -65,7 +66,7 @@ export default function TreatmentAnalysisPage({ params }) {
     }
 
     loadRealData()
-  }, [params.id])
+  }, [resolvedParams.id])
 
   // AI生成治療分析
   const generateTreatmentAnalysis = async (searchTerm, userPolicies, medicalRecords) => {
